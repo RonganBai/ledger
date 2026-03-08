@@ -48,6 +48,8 @@ class LedgerHome extends StatefulWidget {
   final VoidCallback onToggleLocale;
   final VoidCallback onToggleTheme;
   final bool isDarkMode;
+  final bool isGuestMode;
+  final VoidCallback? onExitGuestMode;
   final AppThemeStyle themeStyle;
   final ValueChanged<AppThemeStyle> onThemeStyleChanged;
   final String? themeBackgroundImagePath;
@@ -61,6 +63,8 @@ class LedgerHome extends StatefulWidget {
     required this.onToggleLocale,
     required this.onToggleTheme,
     required this.isDarkMode,
+    required this.isGuestMode,
+    this.onExitGuestMode,
     required this.themeStyle,
     required this.onThemeStyleChanged,
     required this.themeBackgroundImagePath,
@@ -141,6 +145,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
 
   Future<void> _syncDeletedTxsToCloud(List<Transaction> deletedTxs) async {
     if (deletedTxs.isEmpty) return;
+    if (widget.isGuestMode) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     try {
@@ -155,6 +160,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<void> _downloadCloudNow({required String reason}) async {
+    if (widget.isGuestMode) return;
     if (_cloudSyncing) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
@@ -176,6 +182,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
     String txId, {
     required String reason,
   }) async {
+    if (widget.isGuestMode) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     try {
@@ -193,6 +200,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<void> _uploadCreatedAccountToCloud(Account account) async {
+    if (widget.isGuestMode) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     try {
@@ -213,6 +221,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
     Account oldAccount,
     Account newAccount,
   ) async {
+    if (widget.isGuestMode) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     try {
@@ -231,6 +240,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<void> _uploadDeletedAccountToCloud(Account account) async {
+    if (widget.isGuestMode) return;
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     try {
@@ -251,6 +261,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
     ExternalImportSyncPayload? payload, {
     required String reason,
   }) async {
+    if (widget.isGuestMode) return;
     if (payload == null) return;
     for (final id in payload.insertedTransactionIds) {
       await _uploadSingleTxToCloud(id, reason: reason);
@@ -829,6 +840,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                 builder: (_) => SettingsPage(
                   db: widget.db,
                   accountId: _currentAccountId!,
+                  isGuestMode: widget.isGuestMode,
                   onToggleLocale: widget.onToggleLocale,
                   isDarkMode: widget.isDarkMode,
                   onToggleThemeMode: widget.onToggleTheme,
@@ -1852,6 +1864,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                           builder: (_) => SettingsPage(
                             db: widget.db,
                             accountId: currentAccountId,
+                            isGuestMode: widget.isGuestMode,
                             onToggleLocale: onToggleLocale,
                             isDarkMode: widget.isDarkMode,
                             onToggleThemeMode: widget.onToggleTheme,
@@ -1887,6 +1900,10 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                     onToggleTheme: widget.onToggleTheme,
                     onLogout: () async {
                       _closeDrawer();
+                      if (widget.isGuestMode) {
+                        widget.onExitGuestMode?.call();
+                        return;
+                      }
                       await Supabase.instance.client.auth.signOut();
                       AppLog.i('Auth', 'Sign out completed');
                     },

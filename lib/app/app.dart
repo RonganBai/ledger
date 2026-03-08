@@ -44,6 +44,7 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription<AuthState>? _authSub;
   bool _syncingAfterLogin = false;
   bool _inPasswordRecovery = false;
+  bool _isGuestMode = false;
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _MyAppState extends State<MyApp> {
           _session = event.session;
           _authReady = true;
           _inPasswordRecovery = true;
+          _isGuestMode = false;
         });
         AppLog.i('Auth', 'Password recovery flow entered');
         return;
@@ -69,6 +71,9 @@ class _MyAppState extends State<MyApp> {
         _session = event.session;
         _authReady = true;
       });
+      if (event.session != null) {
+        setState(() => _isGuestMode = false);
+      }
       if (event.event == AuthChangeEvent.signedOut) {
         setState(() => _inPasswordRecovery = false);
       }
@@ -105,6 +110,7 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _syncAfterLogin() async {
     if (_syncingAfterLogin) return;
+    if (_isGuestMode) return;
     if (Supabase.instance.client.auth.currentUser == null) return;
     _syncingAfterLogin = true;
     try {
@@ -224,6 +230,33 @@ class _MyAppState extends State<MyApp> {
     await prefs.setDouble(_kThemeBgMistPref, next);
   }
 
+  Future<void> _enterGuestMode() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (_) {
+      // Ignore sign-out errors and continue with local guest mode.
+    }
+    if (!mounted) return;
+    setState(() {
+      _session = null;
+      _inPasswordRecovery = false;
+      _authReady = true;
+      _isGuestMode = true;
+    });
+    AppLog.i('Auth', 'Guest mode entered');
+  }
+
+  void _exitGuestMode() {
+    if (!mounted) return;
+    setState(() {
+      _session = null;
+      _inPasswordRecovery = false;
+      _authReady = true;
+      _isGuestMode = false;
+    });
+    AppLog.i('Auth', 'Guest mode exited');
+  }
+
   Future<ui.Image?> _decodeUiImage(Uint8List bytes) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
@@ -328,13 +361,19 @@ class _MyAppState extends State<MyApp> {
                 setState(() => _inPasswordRecovery = false);
               },
             )
-          : (_session == null
-                ? LoginPage(locale: _locale, onToggleLocale: _toggleLocale)
+          : (_session == null && !_isGuestMode
+                ? LoginPage(
+                    locale: _locale,
+                    onToggleLocale: _toggleLocale,
+                    onContinueAsGuest: _enterGuestMode,
+                  )
                 : LedgerHome(
                     db: widget.db,
                     onToggleLocale: _toggleLocale,
                     onToggleTheme: _toggleTheme,
                     isDarkMode: _darkMode,
+                    isGuestMode: _isGuestMode,
+                    onExitGuestMode: _exitGuestMode,
                     themeStyle: _themeStyle,
                     onThemeStyleChanged: _setThemeStyle,
                     themeBackgroundImagePath: _themeBgImagePath,

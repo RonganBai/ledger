@@ -89,6 +89,7 @@ String themeStyleLabel(BuildContext context, AppThemeStyle style) {
 class SettingsPage extends StatefulWidget {
   final AppDatabase db;
   final int accountId;
+  final bool isGuestMode;
   final VoidCallback? onToggleLocale;
   final bool isDarkMode;
   final VoidCallback? onToggleThemeMode;
@@ -103,6 +104,7 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.db,
     required this.accountId,
+    required this.isGuestMode,
     this.onToggleLocale,
     required this.isDarkMode,
     this.onToggleThemeMode,
@@ -385,19 +387,37 @@ class _SettingsPageState extends State<SettingsPage> {
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => _ImportExportPage(db: widget.db),
+                            builder: (_) => _ImportExportPage(
+                              db: widget.db,
+                              isGuestMode: widget.isGuestMode,
+                            ),
                           ),
                         ),
                       ),
                       const Divider(height: 1),
                       ListTile(
                         title: Text(st(context, 'Account Security')),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const _AccountSecurityPage(),
-                          ),
+                        subtitle: widget.isGuestMode
+                            ? Text(
+                                st(
+                                  context,
+                                  'Guest mode: account security is unavailable.',
+                                ),
+                              )
+                            : null,
+                        trailing: Icon(
+                          widget.isGuestMode
+                              ? Icons.block_rounded
+                              : Icons.chevron_right,
                         ),
+                        enabled: !widget.isGuestMode,
+                        onTap: widget.isGuestMode
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const _AccountSecurityPage(),
+                                ),
+                              ),
                       ),
                     ],
                   ),
@@ -942,8 +962,9 @@ class _PetPage extends StatelessWidget {
 
 class _ImportExportPage extends StatelessWidget {
   final AppDatabase db;
+  final bool isGuestMode;
 
-  const _ImportExportPage({required this.db});
+  const _ImportExportPage({required this.db, required this.isGuestMode});
 
   @override
   Widget build(BuildContext context) {
@@ -987,7 +1008,8 @@ class _ImportExportPage extends StatelessWidget {
             onPressed: () async {
               final deleted = await svc.clearStoredBillData();
               var cloudDeleted = 0;
-              if (Supabase.instance.client.auth.currentUser != null) {
+              if (!isGuestMode &&
+                  Supabase.instance.client.auth.currentUser != null) {
                 cloudDeleted = await CloudBillSyncService(
                   db: db,
                   client: Supabase.instance.client,
@@ -1000,6 +1022,16 @@ class _ImportExportPage extends StatelessWidget {
             },
             child: Text(st(context, 'Clear All Stored Bills')),
           ),
+          if (isGuestMode) ...[
+            const SizedBox(height: 12),
+            Text(
+              st(
+                context,
+                'Guest mode: cloud upload/download features are disabled.',
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
     );

@@ -7,8 +7,14 @@ import 'auth_local_prefs.dart';
 class LoginPage extends StatefulWidget {
   final VoidCallback? onToggleLocale;
   final Locale? locale;
+  final Future<void> Function()? onContinueAsGuest;
 
-  const LoginPage({super.key, this.onToggleLocale, this.locale});
+  const LoginPage({
+    super.key,
+    this.onToggleLocale,
+    this.locale,
+    this.onContinueAsGuest,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -190,6 +196,34 @@ class _LoginPageState extends State<LoginPage> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  Future<void> _continueAsGuest() async {
+    if (_submitting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_t('Continue as Guest', '访客使用')),
+        content: Text(
+          _t(
+            'Guest data cannot use cross-platform sync. Upload/download and account password/email changes will be disabled.',
+            '访客使用数据无法享受多平台数据互通，且上传/下载与账户密码邮箱修改功能将停用。',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_t('Cancel', '取消')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(_t('Confirm', '确定')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.onContinueAsGuest?.call();
   }
 
   @override
@@ -485,6 +519,18 @@ class _LoginPageState extends State<LoginPage> {
                                                 : _t('Create Account', '创建账户')),
                                     ),
                                   ),
+                                  if (_isLoginMode) ...[
+                                    const SizedBox(height: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _submitting
+                                          ? null
+                                          : _continueAsGuest,
+                                      icon: const Icon(Icons.person_outline),
+                                      label: Text(
+                                        _t('Continue as Guest', '访客使用'),
+                                      ),
+                                    ),
+                                  ],
                                   if (_isLoginMode) ...[
                                     const SizedBox(height: 6),
                                     Align(
