@@ -59,18 +59,10 @@ flutter pub get
 flutter run
 ```
 
-## Download APK
+## App Download
 
-- Releases page (always available): https://github.com/RonganBai/ledger/releases
-- Latest release page: https://github.com/RonganBai/ledger/releases/latest
-- Direct APK (available after first release is published):
-  https://github.com/RonganBai/ledger/releases/latest/download/ledger-app.apk
-
-## Release Status
-
-- Current public release target: Android only.
-- Google Play release is coming soon.
-- iOS will not be publicly released for now because the Apple Developer Program cost is currently too high.
+- Releases: https://github.com/RonganBai/ledger/releases
+- Latest release: https://github.com/RonganBai/ledger/releases/latest
 
 ## Supabase Setup
 
