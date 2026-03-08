@@ -60,9 +60,10 @@ flutter run
 
 ## Download APK
 
-- Direct APK: https://github.com/RonganBai/ledger/releases/latest/download/ledger-app.apk
-- Releases page: https://github.com/RonganBai/ledger/releases
-- If the direct APK link is unavailable, open the Releases page and download the latest `.apk` asset.
+- Releases page (always available): https://github.com/RonganBai/ledger/releases
+- Latest release page: https://github.com/RonganBai/ledger/releases/latest
+- Direct APK (available after first release is published):
+  https://github.com/RonganBai/ledger/releases/latest/download/ledger-app.apk
 
 ## Release Status
 
