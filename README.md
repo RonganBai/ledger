@@ -58,6 +58,11 @@ flutter pub get
 flutter run
 ```
 
+## App Download
+
+- Releases: https://github.com/RonganBai/ledger/releases
+- Latest release: https://github.com/RonganBai/ledger/releases/latest
+
 ## Supabase Setup
 
 1. Create a Supabase project.
