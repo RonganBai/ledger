@@ -2,29 +2,6 @@
 
 [中文](README.md) | [English](README.en.md)
 
-一个基于 Flutter 的多端记账应用，支持本地离线账本、云同步、报表分析、定期交易和外部账单导入。
-
-## 中文简介
-
-### 功能概览
-
-- 多账户账本管理（收入、支出、待确认）
-- Drift 本地数据库存储（离线可用）
-- Supabase 账号登录与云端账单同步
-- 统计与深度分析（趋势、分类占比、历史汇总）
-- 微信/支付宝/PNC 等账单文件导入
-- 定期交易管理
-- 中英文切换、主题切换、背景图与桌宠展示
-
-### 技术栈
-
-- `Flutter` / `Dart`
-- `drift` + `sqlite`（本地数据）
-- `supabase_flutter`（鉴权与云同步）
-- `fl_chart`（图表）
-- `shared_preferences`（配置持久化）
-- `image_picker` / `file_picker`（图片与文件导入）
-
 ## English Introduction
 
 A multi-platform ledger app built with Flutter, supporting offline local bookkeeping, cloud sync, reporting, recurring transactions, and external bill import.
@@ -48,6 +25,29 @@ A multi-platform ledger app built with Flutter, supporting offline local bookkee
 - `image_picker` / `file_picker`
 
 完整英文文档见 [README.en.md](README.en.md)。
+
+## 中文简介
+
+一个基于 Flutter 的多端记账应用，支持本地离线账本、云同步、报表分析、定期交易和外部账单导入。
+
+### 功能概览
+
+- 多账户账本管理（收入、支出、待确认）
+- Drift 本地数据库存储（离线可用）
+- Supabase 账号登录与云端账单同步
+- 统计与深度分析（趋势、分类占比、历史汇总）
+- 微信/支付宝/PNC 等账单文件导入
+- 定期交易管理
+- 中英文切换、主题切换、背景图与桌宠展示
+
+### 技术栈
+
+- `Flutter` / `Dart`
+- `drift` + `sqlite`（本地数据）
+- `supabase_flutter`（鉴权与云同步）
+- `fl_chart`（图表）
+- `shared_preferences`（配置持久化）
+- `image_picker` / `file_picker`（图片与文件导入）
 
 ## 目录结构
 
