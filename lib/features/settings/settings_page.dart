@@ -1090,6 +1090,7 @@ class _VerificationPanel extends StatelessWidget {
   final bool sending;
   final bool verifying;
   final bool verified;
+  final int resendCooldown;
   final VoidCallback onSendCode;
   final VoidCallback onVerifyCode;
 
@@ -1098,6 +1099,7 @@ class _VerificationPanel extends StatelessWidget {
     required this.sending,
     required this.verifying,
     required this.verified,
+    required this.resendCooldown,
     required this.onSendCode,
     required this.onVerifyCode,
   });
@@ -1123,12 +1125,19 @@ class _VerificationPanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: sending || verified ? null : onSendCode,
+                    onPressed: sending || verified || resendCooldown > 0
+                        ? null
+                        : onSendCode,
                     icon: const Icon(Icons.send_rounded),
                     label: Text(
                       sending
                           ? st(context, 'Sending...')
-                          : st(context, 'Send Code'),
+                          : (resendCooldown > 0
+                                ? st(
+                                    context,
+                                    'Resend in ${resendCooldown}s',
+                                  )
+                                : st(context, 'Send Code')),
                     ),
                   ),
                 ),
@@ -1185,18 +1194,39 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
   bool _saving = false;
   bool _verified = false;
   String? _error;
+  int _resendCooldown = 0;
+  Timer? _resendTimer;
 
   String? get _currentEmail => Supabase.instance.client.auth.currentUser?.email;
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _codeCtrl.dispose();
     _newPwdCtrl.dispose();
     _confirmCtrl.dispose();
     super.dispose();
   }
 
+  void _startResendCooldown([int seconds = 180]) {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = seconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCooldown <= 1) {
+        timer.cancel();
+        setState(() => _resendCooldown = 0);
+      } else {
+        setState(() => _resendCooldown -= 1);
+      }
+    });
+  }
+
   Future<void> _sendCode() async {
+    if (_resendCooldown > 0) return;
     final email = _currentEmail;
     if (email == null || email.isEmpty) {
       setState(() => _error = st(context, 'Current email not found.'));
@@ -1212,6 +1242,7 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
         shouldCreateUser: false,
       );
       if (!mounted) return;
+      _startResendCooldown(180);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(st(context, 'Verification code sent to $email')),
@@ -1326,6 +1357,7 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
             sending: _sending,
             verifying: _verifying,
             verified: _verified,
+            resendCooldown: _resendCooldown,
             onSendCode: _sendCode,
             onVerifyCode: _verifyCode,
           ),
@@ -1384,17 +1416,38 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
   bool _saving = false;
   bool _verified = false;
   String? _error;
+  int _resendCooldown = 0;
+  Timer? _resendTimer;
 
   String? get _currentEmail => Supabase.instance.client.auth.currentUser?.email;
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _codeCtrl.dispose();
     _newEmailCtrl.dispose();
     super.dispose();
   }
 
+  void _startResendCooldown([int seconds = 180]) {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = seconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCooldown <= 1) {
+        timer.cancel();
+        setState(() => _resendCooldown = 0);
+      } else {
+        setState(() => _resendCooldown -= 1);
+      }
+    });
+  }
+
   Future<void> _sendCode() async {
+    if (_resendCooldown > 0) return;
     final email = _currentEmail;
     if (email == null || email.isEmpty) {
       setState(() => _error = st(context, 'Current email not found.'));
@@ -1410,6 +1463,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
         shouldCreateUser: false,
       );
       if (!mounted) return;
+      _startResendCooldown(180);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(st(context, 'Verification code sent to $email')),
@@ -1530,6 +1584,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
             sending: _sending,
             verifying: _verifying,
             verified: _verified,
+            resendCooldown: _resendCooldown,
             onSendCode: _sendCode,
             onVerifyCode: _verifyCode,
           ),

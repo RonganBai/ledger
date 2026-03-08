@@ -75,12 +75,28 @@ create policy ledger_bills_select_own
 
 create policy ledger_bills_insert_own
   on public.ledger_bills for insert
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.ledger_accounts a
+      where a.id = account_id
+        and a.user_id = auth.uid()
+    )
+  );
 
 create policy ledger_bills_update_own
   on public.ledger_bills for update
   using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.ledger_accounts a
+      where a.id = account_id
+        and a.user_id = auth.uid()
+    )
+  );
 
 create policy ledger_bills_delete_own
   on public.ledger_bills for delete

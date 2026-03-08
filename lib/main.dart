@@ -44,11 +44,14 @@ Future<void> main() async {
     if (supabaseReady) {
       final client = Supabase.instance.client;
       AppLog.i('Supabase', 'REST url=${client.rest.url}');
-      AppLog.i('Supabase', 'Current session=${client.auth.currentSession}');
+      AppLog.i(
+        'Supabase',
+        'Current session state=${client.auth.currentSession == null ? 'signed_out' : 'signed_in'}',
+      );
 
       try {
         final res = await client.from('accounts').select('id').limit(1);
-        AppLog.i('Supabase', 'accounts table probe success: $res');
+        AppLog.i('Supabase', 'accounts table probe success: rows=${res.length}');
       } catch (e, st) {
         AppLog.w(
           'Supabase',

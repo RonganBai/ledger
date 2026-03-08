@@ -11,7 +11,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/db/app_database.dart';
 import '../features/auth/auth_local_prefs.dart';
 import '../features/auth/login_page.dart';
-import '../features/auth/reset_password_page.dart';
 import '../features/ledger/ledger_home.dart';
 import '../services/app_log.dart';
 import '../services/cloud_bill_sync_service.dart';
@@ -33,7 +32,7 @@ class _MyAppState extends State<MyApp> {
   static const _kThemeStylePref = 'app_theme_style';
   static const _kThemeBgImagePref = 'app_theme_bg_image';
   static const _kThemeBgMistPref = 'app_theme_bg_mist';
-  Locale _locale = const Locale('zh');
+  Locale _locale = const Locale('en');
   bool _darkMode = false;
   AppThemeStyle _themeStyle = AppThemeStyle.indigo;
   String? _themeBgImagePath;
@@ -43,7 +42,6 @@ class _MyAppState extends State<MyApp> {
   bool _authReady = false;
   StreamSubscription<AuthState>? _authSub;
   bool _syncingAfterLogin = false;
-  bool _inPasswordRecovery = false;
   bool _isGuestMode = false;
 
   @override
@@ -57,25 +55,12 @@ class _MyAppState extends State<MyApp> {
         'Auth',
         'Auth state changed: ${event.event.name}, hasSession=${event.session != null}',
       );
-      if (event.event == AuthChangeEvent.passwordRecovery) {
-        setState(() {
-          _session = event.session;
-          _authReady = true;
-          _inPasswordRecovery = true;
-          _isGuestMode = false;
-        });
-        AppLog.i('Auth', 'Password recovery flow entered');
-        return;
-      }
       setState(() {
         _session = event.session;
         _authReady = true;
       });
       if (event.session != null) {
         setState(() => _isGuestMode = false);
-      }
-      if (event.event == AuthChangeEvent.signedOut) {
-        setState(() => _inPasswordRecovery = false);
       }
       if (event.session != null &&
           (event.event == AuthChangeEvent.signedIn ||
@@ -239,7 +224,6 @@ class _MyAppState extends State<MyApp> {
     if (!mounted) return;
     setState(() {
       _session = null;
-      _inPasswordRecovery = false;
       _authReady = true;
       _isGuestMode = true;
     });
@@ -250,7 +234,6 @@ class _MyAppState extends State<MyApp> {
     if (!mounted) return;
     setState(() {
       _session = null;
-      _inPasswordRecovery = false;
       _authReady = true;
       _isGuestMode = false;
     });
@@ -353,14 +336,6 @@ class _MyAppState extends State<MyApp> {
       themeAnimationDuration: const Duration(milliseconds: 120),
       home: !_authReady
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _inPasswordRecovery
-          ? ResetPasswordPage(
-              onDone: () async {
-                await Supabase.instance.client.auth.signOut();
-                if (!mounted) return;
-                setState(() => _inPasswordRecovery = false);
-              },
-            )
           : (_session == null && !_isGuestMode
                 ? LoginPage(
                     locale: _locale,

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_log.dart';
 import 'auth_local_prefs.dart';
+import 'reset_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   final VoidCallback? onToggleLocale;
@@ -97,13 +98,12 @@ class _LoginPageState extends State<LoginPage> {
       if (email == null || email.isEmpty) return;
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'ledgerapp://auth-callback/reset-password',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_t('Reset email sent', '重置邮件已发送'))),
       );
-      AppLog.i('Auth', 'Reset password email sent. email=$email');
+      AppLog.i('Auth', 'Reset password email sent');
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -121,6 +121,14 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _openOtpResetPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ResetPasswordPage(initialEmail: _emailCtrl.text.trim()),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -130,10 +138,7 @@ class _LoginPageState extends State<LoginPage> {
 
     final auth = Supabase.instance.client.auth;
     final email = _emailCtrl.text.trim();
-    AppLog.i(
-      'Auth',
-      '${_isLoginMode ? 'SignIn' : 'SignUp'} attempt. email=$email',
-    );
+    AppLog.i('Auth', '${_isLoginMode ? 'SignIn' : 'SignUp'} attempt');
 
     try {
       if (_isLoginMode) {
@@ -145,7 +150,7 @@ class _LoginPageState extends State<LoginPage> {
           email: email,
           autoLogin30Days: _autoLogin30Days,
         );
-        AppLog.i('Auth', 'SignIn success. email=$email');
+        AppLog.i('Auth', 'SignIn success');
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
@@ -177,7 +182,7 @@ class _LoginPageState extends State<LoginPage> {
         }
         AppLog.i(
           'Auth',
-          'SignUp success. email=$email, emailVerified=$verified',
+          'SignUp success. emailVerified=$verified',
         );
       }
     } on AuthException catch (e) {
@@ -538,7 +543,7 @@ class _LoginPageState extends State<LoginPage> {
                                       child: TextButton(
                                         onPressed: _submitting
                                             ? null
-                                            : _showForgotPasswordDialog,
+                                            : _openOtpResetPage,
                                         child: Text(
                                           _t('Forgot password?', '忘记密码？'),
                                         ),
