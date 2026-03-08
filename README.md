@@ -1,6 +1,7 @@
 # Ledger App
 
-[English](README.md) | [中文](README.zh-CN.md)
+[English](README.en.md) | [中文](README.zh-CN.md)
+[Demo](#demo)
 
 A multi-platform ledger app built with Flutter, supporting offline local bookkeeping, cloud sync, reporting, recurring transactions, and external bill import.
 
@@ -79,19 +80,31 @@ flutter run
 
 For public repositories, avoid hardcoding project keys. Prefer environment variables or build-time injection.
 
-## Demo Assets Placeholder
+## Demo
 
-You can add these files manually:
+Quick preview of the core flows and pages:
 
-- `docs/media/demo.gif`
-- `docs/media/home.png`
-- `docs/media/report.png`
+- Main flow animation: `docs/media/demo.gif`
+- Home page: `docs/media/home.jpg`
+- Add bill steps: `docs/media/Add Bill1.jpg`, `docs/media/Add Bill2.jpg`
+- Reports: `docs/media/report1.jpg`, `docs/media/report2.jpg`
+- Settings: `docs/media/settings.jpg`
 
-And embed in README:
-
-```md
 ![Demo](docs/media/demo.gif)
-```
+
+### Screenshots
+
+| Home | Add Bill |
+| --- | --- |
+| ![Home](docs/media/home.jpg) | ![Add Bill Step 1](docs/media/Add%20Bill1.jpg) |
+
+| Add Bill (Step 2) | Reports |
+| --- | --- |
+| ![Add Bill Step 2](docs/media/Add%20Bill2.jpg) | ![Report 1](docs/media/report1.jpg) |
+
+| Reports (More) | Settings |
+| --- | --- |
+| ![Report 2](docs/media/report2.jpg) | ![Settings](docs/media/settings.jpg) |
 
 ## Development & Contribution
 
