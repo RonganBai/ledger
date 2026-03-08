@@ -130,8 +130,15 @@ class CloudBillSyncService {
           if (_isValidUuid(tx.id)) tx.id: tx,
       };
       final localByKey = <String, Transaction>{};
+      final localByKeyNoDirection = <String, Transaction>{};
+      final localBySourceIdOnly = <String, Transaction>{};
       for (final tx in localTxs) {
         localByKey[_localKey(tx)] = tx;
+        localByKeyNoDirection[_localKeyNoDirection(tx)] = tx;
+        final sid = tx.sourceId?.trim();
+        if (sid != null && sid.isNotEmpty) {
+          localBySourceIdOnly[sid] = tx;
+        }
       }
       final cloudById = <String, _CloudBill>{
         for (final bill in cloudTxs) bill.id: bill,
@@ -194,9 +201,11 @@ class CloudBillSyncService {
       for (final cloudTx in cloudTxs) {
         final localBySameId = localById[cloudTx.id];
         if (localBySameId != null) {
-          if (cloudTx.updatedAt.isAfter(
+          final shouldUpdateByTime = cloudTx.updatedAt.isAfter(
             localBySameId.updatedAt.add(const Duration(seconds: 1)),
-          )) {
+          );
+          final shouldUpdateByDiff = !_sameTxContent(localBySameId, cloudTx);
+          if (shouldUpdateByTime || shouldUpdateByDiff) {
             await _updateLocalFromCloud(localBySameId, cloudTx);
             updatedLocal++;
           }
@@ -206,7 +215,18 @@ class CloudBillSyncService {
           cloudTx,
           cloudToLocalAccount: cloudToLocalAccount,
         );
-        final localTx = localByKey[key];
+        final localByExactKey = localByKey[key];
+        final localByNoDirection =
+            localByKeyNoDirection[_cloudKeyNoDirection(
+              cloudTx,
+              cloudToLocalAccount: cloudToLocalAccount,
+            )];
+        final sid = cloudTx.sourceId?.trim();
+        final localBySourceId = sid != null && sid.isNotEmpty
+            ? localBySourceIdOnly[sid]
+            : null;
+        final localTx =
+            localByExactKey ?? localByNoDirection ?? localBySourceId;
         if (localTx == null) {
           final inserted = await _insertLocalFromCloud(
             cloudTx,
@@ -222,6 +242,14 @@ class CloudBillSyncService {
         )) {
           await _updateLocalFromCloud(localTx, cloudTx);
           updatedLocal++;
+          if (localByExactKey == null &&
+              localByNoDirection == null &&
+              localBySourceId != null) {
+            AppLog.i(
+              'CloudSync',
+              'Sync($reason) sourceId-only match override. local=${localTx.id} cloud=${cloudTx.id} from=${localTx.direction} to=${cloudTx.direction}',
+            );
+          }
         }
       }
 
@@ -256,6 +284,13 @@ class CloudBillSyncService {
       final localByKey = <String, Transaction>{
         for (final tx in localTxs) _localKey(tx): tx,
       };
+      final localByKeyNoDirection = <String, Transaction>{
+        for (final tx in localTxs) _localKeyNoDirection(tx): tx,
+      };
+      final localBySourceIdOnly = <String, Transaction>{
+        for (final tx in localTxs)
+          if ((tx.sourceId ?? '').trim().isNotEmpty) tx.sourceId!.trim(): tx,
+      };
 
       var downloaded = 0;
       var updatedLocal = 0;
@@ -263,11 +298,19 @@ class CloudBillSyncService {
       for (final cloudTx in cloudTxs) {
         final localBySameId = localById[cloudTx.id];
         if (localBySameId != null) {
-          if (cloudTx.updatedAt.isAfter(
+          final shouldUpdateByTime = cloudTx.updatedAt.isAfter(
             localBySameId.updatedAt.add(const Duration(seconds: 1)),
-          )) {
+          );
+          final shouldUpdateByDiff = !_sameTxContent(localBySameId, cloudTx);
+          if (shouldUpdateByTime || shouldUpdateByDiff) {
             await _updateLocalFromCloud(localBySameId, cloudTx);
             updatedLocal++;
+            if (shouldUpdateByDiff && !shouldUpdateByTime) {
+              AppLog.i(
+                'CloudSync',
+                'Download($reason) diff-override by id. tx=${localBySameId.id} localUpdatedAt=${localBySameId.updatedAt.toIso8601String()} cloudUpdatedAt=${cloudTx.updatedAt.toIso8601String()}',
+              );
+            }
           }
           continue;
         }
@@ -276,27 +319,121 @@ class CloudBillSyncService {
           cloudTx,
           cloudToLocalAccount: cloudToLocalAccount,
         );
-        final localTx = localByKey[key];
+        final localByExactKey = localByKey[key];
+        final localByNoDirection =
+            localByKeyNoDirection[_cloudKeyNoDirection(
+              cloudTx,
+              cloudToLocalAccount: cloudToLocalAccount,
+            )];
+        final sid = cloudTx.sourceId?.trim();
+        final localBySourceId = sid != null && sid.isNotEmpty
+            ? localBySourceIdOnly[sid]
+            : null;
+        final localByFallback =
+            localByExactKey == null &&
+                localByNoDirection == null &&
+                localBySourceId == null
+            ? await _findDownloadFallbackLocal(cloudTx, cloudToLocalAccount)
+            : null;
+        final localTx =
+            localByExactKey ??
+            localByNoDirection ??
+            localBySourceId ??
+            localByFallback;
         if (localTx == null) {
           final inserted = await _insertLocalFromCloud(
             cloudTx,
             cloudToLocalAccount,
           );
           if (inserted) downloaded++;
+          AppLog.i(
+            'CloudSync',
+            'Download($reason) inserted new local (no match). cloud=${cloudTx.id} dir=${cloudTx.direction} amount=${cloudTx.amountCents} source=${cloudTx.source} sourceId=${cloudTx.sourceId}',
+          );
           continue;
         }
 
-        if (cloudTx.updatedAt.isAfter(
+        final shouldUpdateByTime = cloudTx.updatedAt.isAfter(
           localTx.updatedAt.add(const Duration(seconds: 1)),
-        )) {
+        );
+        final shouldUpdateByDiff = !_sameTxContent(localTx, cloudTx);
+        if (shouldUpdateByTime || shouldUpdateByDiff) {
           await _updateLocalFromCloud(localTx, cloudTx);
           updatedLocal++;
+          if (localByExactKey == null && localByNoDirection != null) {
+            AppLog.i(
+              'CloudSync',
+              'Download($reason) no-direction match override. local=${localTx.id} cloud=${cloudTx.id} from=${localTx.direction} to=${cloudTx.direction}',
+            );
+          } else if (localByExactKey == null &&
+              localByNoDirection == null &&
+              localBySourceId != null) {
+            AppLog.i(
+              'CloudSync',
+              'Download($reason) sourceId-only match override. local=${localTx.id} cloud=${cloudTx.id} from=${localTx.direction} to=${cloudTx.direction}',
+            );
+          } else if (localByExactKey == null &&
+              localByNoDirection == null &&
+              localByFallback != null) {
+            AppLog.i(
+              'CloudSync',
+              'Download($reason) fallback match override. local=${localTx.id} cloud=${cloudTx.id} from=${localTx.direction} to=${cloudTx.direction}',
+            );
+          }
         }
       }
 
       AppLog.i(
         'CloudSync',
         'Done download($reason). downloaded=$downloaded updatedLocal=$updatedLocal',
+      );
+
+      // Cloud-authoritative prune for download mode:
+      // remove local transactions that don't exist in cloud anymore.
+      final localAfter = await (db.select(db.transactions)).get();
+      final cloudIdSet = <String>{for (final c in cloudTxs) c.id};
+      final cloudSourceKeySet = <String>{
+        for (final c in cloudTxs)
+          if ((c.sourceId ?? '').trim().isNotEmpty)
+            'S|${c.source}|${c.sourceId!.trim()}',
+      };
+      final cloudFullKeySet = <String>{
+        for (final c in cloudTxs)
+          _cloudKey(c, cloudToLocalAccount: cloudToLocalAccount),
+      };
+      final cloudNoDirectionKeySet = <String>{
+        for (final c in cloudTxs)
+          _cloudKeyNoDirection(c, cloudToLocalAccount: cloudToLocalAccount),
+      };
+
+      final toDeleteIds = <String>[];
+      for (final local in localAfter) {
+        if (_isValidUuid(local.id) && cloudIdSet.contains(local.id)) {
+          continue;
+        }
+        final sid = local.sourceId?.trim();
+        if (sid != null &&
+            sid.isNotEmpty &&
+            cloudSourceKeySet.contains('S|${local.source}|$sid')) {
+          continue;
+        }
+        if (cloudFullKeySet.contains(_localKey(local))) {
+          continue;
+        }
+        if (cloudNoDirectionKeySet.contains(_localKeyNoDirection(local))) {
+          continue;
+        }
+        toDeleteIds.add(local.id);
+      }
+
+      if (toDeleteIds.isNotEmpty) {
+        await (db.delete(
+          db.transactions,
+        )..where((t) => t.id.isIn(toDeleteIds))).go();
+      }
+      AppLog.i(
+        'CloudSync',
+        'Done download prune($reason). localTotal=${localAfter.length} deleted=${toDeleteIds.length} kept=${localAfter.length - toDeleteIds.length}',
       );
     } catch (e, st) {
       AppLog.e('CloudSync', e, st);
@@ -539,20 +676,28 @@ class CloudBillSyncService {
         .from('ledger_accounts')
         .select('id,name,currency')
         .eq('user_id', userId);
+    final cloudById = <String, String>{};
     final cloudByNameCurrency = <String, String>{};
     for (final row in cloudRows) {
       final id = '${row['id'] ?? ''}';
       final name = '${row['name'] ?? ''}';
       final currency = '${row['currency'] ?? 'USD'}';
       if (id.isEmpty || name.isEmpty) continue;
+      cloudById[id] = id;
       cloudByNameCurrency['$name|${currency.toUpperCase()}'] = id;
     }
 
     final map = <int, String>{};
     for (final a in localAccounts) {
       final key = '${a.name}|${a.currency.toUpperCase()}';
-      var cloudId = cloudByNameCurrency[key];
-      if (cloudId == null) {
+      var cloudId = (a.cloudAccountId ?? '').trim();
+      if (cloudId.isNotEmpty && !cloudById.containsKey(cloudId)) {
+        cloudId = '';
+      }
+      if (cloudId.isEmpty) {
+        cloudId = cloudByNameCurrency[key] ?? '';
+      }
+      if (cloudId.isEmpty) {
         final inserted = await client
             .from('ledger_accounts')
             .insert({
@@ -564,8 +709,17 @@ class CloudBillSyncService {
             })
             .select('id')
             .single();
-        cloudId = '${inserted['id']}';
-        cloudByNameCurrency[key] = cloudId;
+        cloudId = '${inserted['id'] ?? ''}';
+        if (cloudId.isNotEmpty) {
+          cloudByNameCurrency[key] = cloudId;
+          cloudById[cloudId] = cloudId;
+        }
+      }
+      if (cloudId.isEmpty) continue;
+      if ((a.cloudAccountId ?? '').trim() != cloudId && cloudId.isNotEmpty) {
+        await (db.update(db.accounts)..where((x) => x.id.equals(a.id))).write(
+          AccountsCompanion(cloudAccountId: d.Value(cloudId)),
+        );
       }
       map[a.id] = cloudId;
     }
@@ -576,6 +730,11 @@ class CloudBillSyncService {
     final cloudRows = await _fetchCloudAccounts(userId);
     final localRows = await (db.select(db.accounts)).get();
 
+    final localByCloudId = <String, Account>{
+      for (final a in localRows)
+        if ((a.cloudAccountId ?? '').trim().isNotEmpty)
+          a.cloudAccountId!.trim(): a,
+    };
     final localByKey = <String, Account>{
       for (final a in localRows) _accountKey(a.name, a.currency): a,
     };
@@ -583,13 +742,14 @@ class CloudBillSyncService {
 
     for (final cloud in cloudRows) {
       final key = _accountKey(cloud.name, cloud.currency);
-      final local = localByKey[key];
+      final local = localByCloudId[cloud.id] ?? localByKey[key];
       if (local != null) {
         cloudToLocal[cloud.id] = local.id;
         await (db.update(
           db.accounts,
         )..where((a) => a.id.equals(local.id))).write(
           AccountsCompanion(
+            cloudAccountId: d.Value(cloud.id),
             type: d.Value(cloud.type),
             currency: d.Value(cloud.currency),
             isActive: d.Value(cloud.isActive),
@@ -604,6 +764,7 @@ class CloudBillSyncService {
           .insert(
             AccountsCompanion.insert(
               name: cloud.name,
+              cloudAccountId: d.Value(cloud.id),
               type: d.Value(cloud.type),
               currency: d.Value(cloud.currency),
               isActive: d.Value(cloud.isActive),
@@ -620,22 +781,41 @@ class CloudBillSyncService {
   }
 
   Future<List<_CloudAccount>> _fetchCloudAccounts(String userId) async {
-    final rows = await client
-        .from('ledger_accounts')
-        .select('id,name,type,currency,is_active,sort_order')
-        .eq('user_id', userId);
-    return rows.map(_CloudAccount.fromMap).toList(growable: false);
+    try {
+      final rows = await client
+          .from('ledger_accounts')
+          .select('id,name,type,currency,is_active,sort_order')
+          .eq('user_id', userId);
+      return rows.map(_CloudAccount.fromMap).toList(growable: false);
+    } catch (_) {
+      final rows = await client
+          .from('ledger_accounts')
+          .select('id,name,currency,is_active,sort_order')
+          .eq('user_id', userId);
+      return rows.map(_CloudAccount.fromMap).toList(growable: false);
+    }
   }
 
   Future<List<_CloudBill>> _fetchCloudBills(String userId) async {
-    final rows = await client
-        .from('ledger_bills')
-        .select(
-          'id,account_id,source,source_id,direction,amount_cents,currency,merchant,memo,occurred_at,created_at,updated_at',
-        )
-        .eq('user_id', userId)
-        .order('occurred_at', ascending: false);
-    return rows.map(_CloudBill.fromMap).toList(growable: false);
+    try {
+      final rows = await client
+          .from('ledger_bills')
+          .select(
+            'id,account_id,source,source_id,direction,amount_cents,currency,merchant,memo,category_key,occurred_at,created_at,updated_at',
+          )
+          .eq('user_id', userId)
+          .order('occurred_at', ascending: false);
+      return rows.map(_CloudBill.fromMap).toList(growable: false);
+    } catch (_) {
+      final rows = await client
+          .from('ledger_bills')
+          .select(
+            'id,account_id,source,source_id,direction,amount_cents,currency,merchant,memo,occurred_at,created_at,updated_at',
+          )
+          .eq('user_id', userId)
+          .order('occurred_at', ascending: false);
+      return rows.map(_CloudBill.fromMap).toList(growable: false);
+    }
   }
 
   Future<void> _insertCloudBill({
@@ -644,7 +824,8 @@ class CloudBillSyncService {
     required Transaction tx,
   }) async {
     if (cloudAccountId == null) return;
-    await client.from('ledger_bills').insert({
+    final categoryKey = await _categoryKeyById(tx.categoryId);
+    final payload = <String, dynamic>{
       'id': _validUuidOrGenerated(tx.id),
       'user_id': userId,
       'account_id': cloudAccountId,
@@ -658,7 +839,14 @@ class CloudBillSyncService {
       'occurred_at': tx.occurredAt.toUtc().toIso8601String(),
       'created_at': tx.createdAt.toUtc().toIso8601String(),
       'updated_at': tx.updatedAt.toUtc().toIso8601String(),
-    });
+    };
+    try {
+      payload['category_key'] = categoryKey;
+      await client.from('ledger_bills').insert(payload);
+    } catch (_) {
+      payload.remove('category_key');
+      await client.from('ledger_bills').insert(payload);
+    }
   }
 
   Future<void> _updateCloudBill(
@@ -668,22 +856,34 @@ class CloudBillSyncService {
     String? cloudAccountId,
   ) async {
     if (cloudAccountId == null) return;
-    await client
-        .from('ledger_bills')
-        .update({
-          'account_id': cloudAccountId,
-          'source': tx.source,
-          'source_id': tx.sourceId,
-          'direction': tx.direction,
-          'amount_cents': tx.amountCents,
-          'currency': tx.currency,
-          'merchant': tx.merchant,
-          'memo': tx.memo,
-          'occurred_at': tx.occurredAt.toUtc().toIso8601String(),
-          'updated_at': tx.updatedAt.toUtc().toIso8601String(),
-        })
-        .eq('id', cloudBillId)
-        .eq('user_id', userId);
+    final categoryKey = await _categoryKeyById(tx.categoryId);
+    final payload = <String, dynamic>{
+      'account_id': cloudAccountId,
+      'source': tx.source,
+      'source_id': tx.sourceId,
+      'direction': tx.direction,
+      'amount_cents': tx.amountCents,
+      'currency': tx.currency,
+      'merchant': tx.merchant,
+      'memo': tx.memo,
+      'occurred_at': tx.occurredAt.toUtc().toIso8601String(),
+      'updated_at': tx.updatedAt.toUtc().toIso8601String(),
+    };
+    try {
+      payload['category_key'] = categoryKey;
+      await client
+          .from('ledger_bills')
+          .update(payload)
+          .eq('id', cloudBillId)
+          .eq('user_id', userId);
+    } catch (_) {
+      payload.remove('category_key');
+      await client
+          .from('ledger_bills')
+          .update(payload)
+          .eq('id', cloudBillId)
+          .eq('user_id', userId);
+    }
   }
 
   Future<bool> _insertLocalFromCloud(
@@ -700,13 +900,16 @@ class CloudBillSyncService {
     }
     final existing = await _findExistingLocalForCloudBill(bill, localAccountId);
     if (existing != null) {
-      if (bill.updatedAt.isAfter(
+      final shouldUpdateByTime = bill.updatedAt.isAfter(
         existing.updatedAt.add(const Duration(seconds: 1)),
-      )) {
+      );
+      final shouldUpdateByDiff = !_sameTxContent(existing, bill);
+      if (shouldUpdateByTime || shouldUpdateByDiff) {
         await _updateLocalFromCloud(existing, bill);
       }
       return false;
     }
+    final inferredCategoryId = await _inferCategoryIdForCloudBill(bill);
     await db
         .into(db.transactions)
         .insert(
@@ -720,7 +923,7 @@ class CloudBillSyncService {
             currency: d.Value(bill.currency),
             merchant: d.Value(bill.merchant),
             memo: d.Value(bill.memo),
-            categoryId: const d.Value(null),
+            categoryId: d.Value(inferredCategoryId),
             occurredAt: bill.occurredAt.toLocal(),
             createdAt: d.Value(bill.createdAt.toLocal()),
             updatedAt: d.Value(bill.updatedAt.toLocal()),
@@ -776,6 +979,67 @@ class CloudBillSyncService {
         return c;
       }
     }
+
+    final candidatesIgnoreDirection =
+        await (db.select(db.transactions)..where(
+              (t) =>
+                  t.accountId.equals(localAccountId) &
+                  t.amountCents.equals(bill.amountCents) &
+                  t.occurredAt.isBetweenValues(start, end),
+            ))
+            .get();
+    for (final c in candidatesIgnoreDirection) {
+      if ((c.merchant ?? '').trim() == merchant &&
+          (c.memo ?? '').trim() == memo) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  Future<Transaction?> _findDownloadFallbackLocal(
+    _CloudBill bill,
+    Map<String, int> cloudToLocalAccount,
+  ) async {
+    final localAccountId = cloudToLocalAccount[bill.accountId];
+    if (localAccountId != null) {
+      final inAccount = await _findExistingLocalForCloudBill(
+        bill,
+        localAccountId,
+      );
+      if (inAccount != null) return inAccount;
+    }
+
+    final sid = bill.sourceId?.trim();
+    if (sid != null && sid.isNotEmpty) {
+      final bySourceId =
+          await (db.select(db.transactions)
+                ..where(
+                  (t) => t.source.equals(bill.source) & t.sourceId.equals(sid),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (bySourceId != null) return bySourceId;
+    }
+
+    final targetOccurred = bill.occurredAt.toLocal();
+    final start = targetOccurred.subtract(const Duration(seconds: 1));
+    final end = targetOccurred.add(const Duration(seconds: 1));
+    final merchant = (bill.merchant ?? '').trim();
+    final memo = (bill.memo ?? '').trim();
+    final candidates =
+        await (db.select(db.transactions)..where(
+              (t) =>
+                  t.amountCents.equals(bill.amountCents) &
+                  t.occurredAt.isBetweenValues(start, end),
+            ))
+            .get();
+    for (final c in candidates) {
+      if ((c.merchant ?? '').trim() == merchant &&
+          (c.memo ?? '').trim() == memo) {
+        return c;
+      }
+    }
     return null;
   }
 
@@ -783,6 +1047,9 @@ class CloudBillSyncService {
     Transaction local,
     _CloudBill cloud,
   ) async {
+    final inferredCategoryId = local.categoryId == null
+        ? await _inferCategoryIdForCloudBill(cloud)
+        : null;
     await (db.update(
       db.transactions,
     )..where((t) => t.id.equals(local.id))).write(
@@ -794,28 +1061,134 @@ class CloudBillSyncService {
         currency: d.Value(cloud.currency),
         merchant: d.Value(cloud.merchant),
         memo: d.Value(cloud.memo),
+        categoryId: d.Value(inferredCategoryId ?? local.categoryId),
         occurredAt: d.Value(cloud.occurredAt.toLocal()),
         updatedAt: d.Value(cloud.updatedAt.toLocal()),
       ),
     );
   }
 
+  Future<int?> _inferCategoryIdForCloudBill(_CloudBill bill) async {
+    final key =
+        _normalizeCategoryKey(bill.categoryKey) ??
+        _normalizeCategoryKey((bill.memo ?? '').trim());
+    if (key == null) return null;
+
+    final preferredDirection = bill.direction == 'income'
+        ? 'income'
+        : 'expense';
+    final byPreferred =
+        await (db.select(db.categories)
+              ..where(
+                (c) =>
+                    c.name.equals(key) & c.direction.equals(preferredDirection),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    if (byPreferred != null) return byPreferred.id;
+
+    final byAny =
+        await (db.select(db.categories)
+              ..where((c) => c.name.equals(key))
+              ..limit(1))
+            .getSingleOrNull();
+    return byAny?.id;
+  }
+
+  Future<String?> _categoryKeyById(int? categoryId) async {
+    if (categoryId == null) return null;
+    final row =
+        await (db.select(db.categories)
+              ..where((c) => c.id.equals(categoryId))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) return null;
+    return _normalizeCategoryKey(row.name);
+  }
+
   Future<int> _resolveLocalAccountId(
     String cloudAccountId,
     String currency,
   ) async {
-    final account =
+    final byCloudId =
         await (db.select(db.accounts)
-              ..where((a) => a.currency.equals(currency))
+              ..where((a) => a.cloudAccountId.equals(cloudAccountId))
               ..limit(1))
             .getSingleOrNull();
-    if (account != null) return account.id;
+    if (byCloudId != null) return byCloudId.id;
+
+    final user = client.auth.currentUser;
+    if (user != null) {
+      try {
+        dynamic row;
+        try {
+          row = await client
+              .from('ledger_accounts')
+              .select('id,name,type,currency,is_active,sort_order')
+              .eq('user_id', user.id)
+              .eq('id', cloudAccountId)
+              .maybeSingle();
+        } catch (_) {
+          row = await client
+              .from('ledger_accounts')
+              .select('id,name,currency,is_active,sort_order')
+              .eq('user_id', user.id)
+              .eq('id', cloudAccountId)
+              .maybeSingle();
+        }
+
+        if (row is Map<String, dynamic>) {
+          final cloud = _CloudAccount.fromMap(row);
+          final existing =
+              await (db.select(db.accounts)
+                    ..where(
+                      (a) =>
+                          a.name.equals(cloud.name) &
+                          a.currency.equals(cloud.currency),
+                    )
+                    ..limit(1))
+                  .getSingleOrNull();
+          if (existing != null) {
+            await (db.update(
+              db.accounts,
+            )..where((a) => a.id.equals(existing.id))).write(
+              AccountsCompanion(
+                cloudAccountId: d.Value(cloudAccountId),
+                type: d.Value(cloud.type),
+                currency: d.Value(cloud.currency),
+                isActive: d.Value(cloud.isActive),
+                sortOrder: d.Value(cloud.sortOrder),
+              ),
+            );
+            return existing.id;
+          }
+
+          return db
+              .into(db.accounts)
+              .insert(
+                AccountsCompanion.insert(
+                  name: cloud.name,
+                  cloudAccountId: d.Value(cloudAccountId),
+                  type: d.Value(cloud.type),
+                  currency: d.Value(cloud.currency),
+                  isActive: d.Value(cloud.isActive),
+                  sortOrder: d.Value(cloud.sortOrder),
+                ),
+              );
+        }
+      } catch (e, st) {
+        AppLog.e('CloudSync', e, st);
+      }
+    }
+
+    final fallbackCurrency = currency.toUpperCase();
     return db
         .into(db.accounts)
         .insert(
           AccountsCompanion.insert(
-            name: 'Cloud $currency',
-            currency: d.Value(currency),
+            name: 'Cloud-$fallbackCurrency-${cloudAccountId.substring(0, 6)}',
+            cloudAccountId: d.Value(cloudAccountId),
+            currency: d.Value(fallbackCurrency),
             type: const d.Value('bank'),
           ),
         );
@@ -829,6 +1202,14 @@ class CloudBillSyncService {
     return 'F|${tx.accountId}|${tx.direction}|${tx.amountCents}|${tx.occurredAt.toUtc().toIso8601String()}|${(tx.merchant ?? '').trim()}|${(tx.memo ?? '').trim()}';
   }
 
+  String _localKeyNoDirection(Transaction tx) {
+    final sid = tx.sourceId?.trim();
+    if (sid != null && sid.isNotEmpty) {
+      return 'S|${tx.source}|$sid';
+    }
+    return 'N|${tx.accountId}|${tx.amountCents}|${tx.occurredAt.toUtc().toIso8601String()}|${(tx.merchant ?? '').trim()}|${(tx.memo ?? '').trim()}';
+  }
+
   String _cloudKey(_CloudBill tx, {Map<String, int>? cloudToLocalAccount}) {
     final sid = tx.sourceId?.trim();
     if (sid != null && sid.isNotEmpty) {
@@ -839,6 +1220,21 @@ class CloudBillSyncService {
         ? '${cloudToLocalAccount[tx.accountId]}'
         : 'cloud:${tx.accountId}';
     return 'F|$accountToken|${tx.direction}|${tx.amountCents}|${tx.occurredAt.toUtc().toIso8601String()}|${(tx.merchant ?? '').trim()}|${(tx.memo ?? '').trim()}';
+  }
+
+  String _cloudKeyNoDirection(
+    _CloudBill tx, {
+    Map<String, int>? cloudToLocalAccount,
+  }) {
+    final sid = tx.sourceId?.trim();
+    if (sid != null && sid.isNotEmpty) {
+      return 'S|${tx.source}|$sid';
+    }
+    final accountToken =
+        cloudToLocalAccount != null && cloudToLocalAccount[tx.accountId] != null
+        ? '${cloudToLocalAccount[tx.accountId]}'
+        : 'cloud:${tx.accountId}';
+    return 'N|$accountToken|${tx.amountCents}|${tx.occurredAt.toUtc().toIso8601String()}|${(tx.merchant ?? '').trim()}|${(tx.memo ?? '').trim()}';
   }
 
   String _validUuidOrGenerated(String id) {
@@ -866,6 +1262,7 @@ class _CloudBill {
   final String currency;
   final String? merchant;
   final String? memo;
+  final String? categoryKey;
   final DateTime occurredAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -880,6 +1277,7 @@ class _CloudBill {
     required this.currency,
     required this.merchant,
     required this.memo,
+    required this.categoryKey,
     required this.occurredAt,
     required this.createdAt,
     required this.updatedAt,
@@ -890,13 +1288,14 @@ class _CloudBill {
     return _CloudBill(
       id: '${m['id']}',
       accountId: '${m['account_id']}',
-      source: '${m['source'] ?? 'manual'}',
+      source: _normalizeSource(m['source']),
       sourceId: m['source_id'] as String?,
-      direction: '${m['direction'] ?? 'expense'}',
+      direction: _normalizeDirection(m['direction']),
       amountCents: (m['amount_cents'] as num).toInt(),
       currency: '${m['currency'] ?? 'USD'}',
       merchant: m['merchant'] as String?,
       memo: m['memo'] as String?,
+      categoryKey: m['category_key'] as String?,
       occurredAt: dt('occurred_at'),
       createdAt: dt('created_at'),
       updatedAt: dt('updated_at'),
@@ -927,8 +1326,129 @@ class _CloudAccount {
       name: '${m['name'] ?? ''}',
       type: '${m['type'] ?? 'cash'}',
       currency: '${m['currency'] ?? 'USD'}'.toUpperCase(),
-      isActive: m['is_active'] == true,
+      isActive: _parseCloudIsActive(m['is_active']),
       sortOrder: (m['sort_order'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+bool _parseCloudIsActive(dynamic raw) {
+  if (raw == null) return true;
+  if (raw is bool) return raw;
+  if (raw is num) return raw != 0;
+  final text = raw.toString().trim().toLowerCase();
+  if (text == 'true' || text == '1') return true;
+  if (text == 'false' || text == '0') return false;
+  return true;
+}
+
+String _normalizeDirection(dynamic raw) {
+  final text = (raw?.toString() ?? 'expense').trim().toLowerCase();
+  if (text == 'income' || text == 'expense' || text == 'pending') return text;
+  return 'expense';
+}
+
+String _normalizeSource(dynamic raw) {
+  final text = (raw?.toString() ?? 'manual').trim().toLowerCase();
+  const allowed = <String>{
+    'manual',
+    'paypal',
+    'pnc',
+    'wechatpay',
+    'alipay',
+    'recurring',
+  };
+  if (allowed.contains(text)) return text;
+  return 'manual';
+}
+
+String? _normalizeCategoryKey(String? raw) {
+  var text = (raw ?? '').trim().toLowerCase();
+  if (text.isEmpty) return null;
+  if (text.contains('|')) {
+    final parts = text
+        .split('|')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isNotEmpty) {
+      // Prefer right-most token, e.g. "... | Restaurants and Dining"
+      text = parts.last;
+    }
+  }
+  const knownKeys = <String>{
+    'food',
+    'transport',
+    'shopping',
+    'bills',
+    'entertainment',
+    'health',
+    'salary',
+    'refund',
+    'rent',
+    'utilities',
+    'travel',
+    'medical',
+    'gift',
+    'transfer',
+    'other',
+  };
+  if (knownKeys.contains(text)) return text;
+
+  if (text.contains('restaurant') ||
+      text.contains('dining') ||
+      text.contains('doordash') ||
+      text.contains('food')) {
+    return 'food';
+  }
+  if (text.contains('uber') ||
+      text.contains('lyft') ||
+      text.contains('transport') ||
+      text.contains('travel')) {
+    return 'transport';
+  }
+  if (text.contains('shopping') || text.contains('amazon')) {
+    return 'shopping';
+  }
+  if (text.contains('rent')) return 'rent';
+  if (text.contains('utility') ||
+      text.contains('electric') ||
+      text.contains('water')) {
+    return 'utilities';
+  }
+  if (text.contains('salary') || text.contains('payroll')) return 'salary';
+  if (text.contains('refund')) return 'refund';
+  if (text.contains('gift')) return 'gift';
+  if (text.contains('transfer') || text.contains('zelle')) return 'transfer';
+
+  const enAlias = <String, String>{
+    'food': 'food',
+    'transport': 'transport',
+    'shopping': 'shopping',
+    'bills': 'bills',
+    'entertainment': 'entertainment',
+    'health': 'health',
+    'salary': 'salary',
+    'refund': 'refund',
+    'rent': 'rent',
+    'utilities': 'utilities',
+    'travel': 'travel',
+    'medical': 'medical',
+    'gift': 'gift',
+    'transfer': 'transfer',
+    'other': 'other',
+  };
+  return enAlias[text];
+}
+
+bool _sameTxContent(Transaction local, _CloudBill cloud) {
+  return local.source == cloud.source &&
+      (local.sourceId ?? '') == (cloud.sourceId ?? '') &&
+      local.direction == cloud.direction &&
+      local.amountCents == cloud.amountCents &&
+      local.currency.toUpperCase() == cloud.currency.toUpperCase() &&
+      (local.merchant ?? '') == (cloud.merchant ?? '') &&
+      (local.memo ?? '') == (cloud.memo ?? '') &&
+      local.occurredAt.toUtc().toIso8601String() ==
+          cloud.occurredAt.toUtc().toIso8601String();
 }

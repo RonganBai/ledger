@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+
+import 'ledger_quick_actions_texts.dart';
 
 class LedgerQuickActions extends StatelessWidget {
   final bool isSearchOpen;
@@ -111,7 +113,7 @@ class LedgerQuickActions extends StatelessWidget {
                   key: searchButtonKey,
                   size: size,
                   icon: Icons.search_rounded,
-                  tooltip: 'Search',
+                  tooltip: lqat(context, 'Search'),
                   onTap: onToggleSearch,
                   selected: isSearchOpen,
                 ),
@@ -120,7 +122,7 @@ class LedgerQuickActions extends StatelessWidget {
                   key: addButtonKey,
                   size: size,
                   icon: Icons.add_rounded,
-                  tooltip: 'Add',
+                  tooltip: lqat(context, 'Add'),
                   onTap: onOpenAdd,
                 ),
               ],

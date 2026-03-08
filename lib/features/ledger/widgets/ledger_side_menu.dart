@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../l10n/tr.dart';
+import 'ledger_side_menu_texts.dart';
 
 class LedgerSideMenu extends StatelessWidget {
   final WidgetBuilder statsPageBuilder;
@@ -131,35 +131,27 @@ class LedgerSideMenu extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      groupTitle(tr(context, en: 'Accounts', zh: '账户')),
+                      groupTitle(lsmt(context, 'Accounts')),
                       card(
                         children: [
                           tile(
                             icon: Icons.swap_horiz_rounded,
-                            title: tr(
-                              context,
-                              en: 'Switch Account',
-                              zh: '切换账户',
-                            ),
+                            title: lsmt(context, 'Switch Account'),
                             onTap: onSwitchAccount,
                           ),
                           tile(
                             icon: Icons.account_balance_wallet_rounded,
-                            title: tr(
-                              context,
-                              en: 'Manage Accounts',
-                              zh: '账户管理',
-                            ),
+                            title: lsmt(context, 'Manage Accounts'),
                             onTap: onManageAccounts,
                           ),
                         ],
                       ),
-                      groupTitle(tr(context, en: 'Navigate', zh: '导航')),
+                      groupTitle(lsmt(context, 'Navigate')),
                       card(
                         children: [
                           tile(
                             icon: Icons.analytics_rounded,
-                            title: tr(context, en: 'Stats', zh: '统计'),
+                            title: lsmt(context, 'Stats'),
                             onTap: () {
                               if (onOpenStats != null) {
                                 onOpenStats!.call();
@@ -173,51 +165,43 @@ class LedgerSideMenu extends StatelessWidget {
                           ),
                           tile(
                             icon: Icons.calendar_month_rounded,
-                            title: tr(context, en: 'History', zh: '历史'),
+                            title: lsmt(context, 'History'),
                             onTap: onOpenHistory,
                           ),
                           tile(
                             icon: Icons.insights_rounded,
-                            title: tr(context, en: 'Analysis', zh: '分析'),
+                            title: lsmt(context, 'Analysis'),
                             onTap: onOpenAnalysis,
                           ),
                           tile(
                             icon: Icons.repeat_rounded,
-                            title: tr(context, en: 'Recurring', zh: '周期交易'),
+                            title: lsmt(context, 'Recurring'),
                             onTap: onOpenRecurring,
                           ),
                           tile(
                             icon: Icons.category_outlined,
-                            title: tr(context, en: 'Categories', zh: '分类管理'),
+                            title: lsmt(context, 'Categories'),
                             onTap: onOpenCategories,
                           ),
                           tile(
                             icon: Icons.upload_file_rounded,
-                            title: tr(
-                              context,
-                              en: 'Import External Bills',
-                              zh: '导入外部账单',
-                            ),
+                            title: lsmt(context, 'Import External Bills'),
                             onTap: onOpenExternalImport,
                           ),
                         ],
                       ),
-                      groupTitle(tr(context, en: 'Preferences', zh: '偏好')),
+                      groupTitle(lsmt(context, 'Preferences')),
                       card(
                         children: [
                           if (onReplayTutorial != null)
                             tile(
                               icon: Icons.school_rounded,
-                              title: tr(
-                                context,
-                                en: 'Replay Tutorial',
-                                zh: '重新播放新手教程',
-                              ),
+                              title: lsmt(context, 'Replay Tutorial'),
                               onTap: onReplayTutorial!,
                             ),
                           tile(
                             icon: Icons.settings_rounded,
-                            title: tr(context, en: 'Settings', zh: '设置'),
+                            title: lsmt(context, 'Settings'),
                             onTap: onOpenSettings,
                           ),
                         ],
@@ -248,7 +232,7 @@ class LedgerSideMenu extends StatelessWidget {
                             ? Icons.wb_sunny_rounded
                             : Icons.dark_mode_rounded,
                       ),
-                      label: Text(tr(context, en: 'Theme', zh: '主题')),
+                      label: Text(lsmt(context, 'Theme')),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -256,7 +240,7 @@ class LedgerSideMenu extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: onLogout,
                       icon: const Icon(Icons.logout_rounded),
-                      label: Text(tr(context, en: 'Sign Out', zh: '登出')),
+                      label: Text(lsmt(context, 'Sign Out')),
                     ),
                   ),
                 ],

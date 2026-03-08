@@ -3,6 +3,9 @@ import 'package:drift/drift.dart';
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
 
+  // Cloud account binding (Supabase ledger_accounts.id)
+  TextColumn get cloudAccountId => text().nullable()();
+
   // 账户名称：Cash / PayPal / Card ...
   TextColumn get name => text().withLength(min: 1, max: 50)();
 
@@ -20,4 +23,9 @@ class Accounts extends Table {
 
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+        {cloudAccountId},
+      ];
 }

@@ -11,7 +11,7 @@ import '../../app/currency.dart';
 import '../../app/settings.dart';
 import '../../app/theme.dart';
 import '../../data/db/app_database.dart';
-import '../../l10n/tr.dart';
+import 'ledger_home_texts.dart';
 import '../../l10n/category_i18n.dart';
 import '../onboarding/coach_overlay.dart';
 import '../onboarding/home_tutorial_controller.dart';
@@ -532,9 +532,9 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
               fmtDt(row.tx.occurredAt),
               '${row.tx.occurredAt.year}-${two(row.tx.occurredAt.month)}-${two(row.tx.occurredAt.day)}',
               row.tx.direction == 'income'
-                  ? 'income 收入'
+                  ? 'income 鏀跺叆'
                   : (row.tx.direction == 'expense'
-                        ? 'expense 支出'
+                        ? 'expense 鏀嚭'
                         : 'pending 待处理'),
             ].map(norm).toList(growable: false);
 
@@ -580,47 +580,47 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       _QaOption(
         key: 'stats',
         icon: Icons.bar_chart_rounded,
-        label: tr(context, en: 'Stats', zh: '统计'),
+        label: lht(context, 'Stats'),
       ),
       _QaOption(
         key: 'history',
         icon: Icons.history_rounded,
-        label: tr(context, en: 'History', zh: '历史'),
+        label: lht(context, 'History'),
       ),
       _QaOption(
         key: 'categories',
         icon: Icons.category_rounded,
-        label: tr(context, en: 'Categories', zh: '分类'),
+        label: lht(context, 'Categories'),
       ),
       _QaOption(
         key: 'settings',
         icon: Icons.settings_rounded,
-        label: tr(context, en: 'Settings', zh: '设置'),
+        label: lht(context, 'Settings'),
       ),
       _QaOption(
         key: 'switchAccount',
         icon: Icons.swap_horiz_rounded,
-        label: tr(context, en: 'Switch Account', zh: '切换账户'),
+        label: lht(context, 'Switch Account'),
       ),
       _QaOption(
         key: 'manageAccounts',
         icon: Icons.account_balance_wallet_rounded,
-        label: tr(context, en: 'Manage Accounts', zh: '账户管理'),
+        label: lht(context, 'Manage Accounts'),
       ),
       _QaOption(
         key: 'recurring',
         icon: Icons.repeat_rounded,
-        label: tr(context, en: 'Recurring', zh: '周期交易'),
+        label: lht(context, 'Recurring'),
       ),
       _QaOption(
         key: 'analysis',
         icon: Icons.insights_rounded,
-        label: tr(context, en: 'Analysis', zh: '分析'),
+        label: lht(context, 'Analysis'),
       ),
       _QaOption(
         key: 'externalImport',
         icon: Icons.file_upload_rounded,
-        label: tr(context, en: 'External Import', zh: '外部账单导入'),
+        label: lht(context, 'External Import'),
       ),
     ];
   }
@@ -698,7 +698,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'switchAccount':
         return _QaItem(
           icon: Icons.swap_horiz_rounded,
-          tooltip: tr(context, en: 'Switch Account', zh: '切换账户'),
+          tooltip: lht(context, 'Switch Account'),
           onTap: () async {
             await _switchAccountFromSheet();
           },
@@ -706,7 +706,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'manageAccounts':
         return _QaItem(
           icon: Icons.account_balance_wallet_rounded,
-          tooltip: tr(context, en: 'Manage Accounts', zh: '账户管理'),
+          tooltip: lht(context, 'Manage Accounts'),
           onTap: () async {
             await Navigator.push(
               context,
@@ -725,7 +725,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'recurring':
         return _QaItem(
           icon: Icons.repeat_rounded,
-          tooltip: tr(context, en: 'Recurring', zh: '周期交易'),
+          tooltip: lht(context, 'Recurring'),
           onTap: () async {
             if (_currentAccountId == null) return;
             await Navigator.push(
@@ -745,7 +745,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'analysis':
         return _QaItem(
           icon: Icons.insights_rounded,
-          tooltip: tr(context, en: 'Analysis', zh: '分析'),
+          tooltip: lht(context, 'Analysis'),
           onTap: () async {
             if (_currentAccountId == null) return;
             await Navigator.push(
@@ -764,7 +764,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'externalImport':
         return _QaItem(
           icon: Icons.file_upload_rounded,
-          tooltip: tr(context, en: 'External Import', zh: '外部账单导入'),
+          tooltip: lht(context, 'External Import'),
           onTap: () async {
             if (_currentAccountId == null) return;
             final imported = await Navigator.push<ExternalImportSyncPayload>(
@@ -788,7 +788,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'history':
         return _QaItem(
           icon: Icons.history_rounded,
-          tooltip: tr(context, en: 'History', zh: '历史'),
+          tooltip: lht(context, 'History'),
           onTap: () async {
             if (_currentAccountId == null) return;
             await Navigator.push(
@@ -807,7 +807,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'categories':
         return _QaItem(
           icon: Icons.category_rounded,
-          tooltip: tr(context, en: 'Categories', zh: '分类'),
+          tooltip: lht(context, 'Categories'),
           onTap: () async {
             await Navigator.push(
               context,
@@ -821,7 +821,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       case 'settings':
         return _QaItem(
           icon: Icons.settings_rounded,
-          tooltip: tr(context, en: 'Settings', zh: '设置'),
+          tooltip: lht(context, 'Settings'),
           onTap: () async {
             await Navigator.push(
               context,
@@ -851,7 +851,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       default:
         return _QaItem(
           icon: Icons.bar_chart_rounded,
-          tooltip: tr(context, en: 'Stats', zh: '统计'),
+          tooltip: lht(context, 'Stats'),
           onTap: _openStats,
         );
     }
@@ -959,11 +959,10 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
     return <HomeTutorialStep>[
       HomeTutorialStep(
         id: 'welcome',
-        title: tr(context, en: 'Home Tutorial', zh: '新手教程'),
-        message: tr(
+        title: lht(context, 'Home Tutorial'),
+        message: lht(
           context,
-          en: 'This guide shows adding bills, editing/deleting, searching, batch delete, and quick actions.',
-          zh: '本教程将演示：新增账单、编辑删除、搜索筛选、批量删除和快捷操作。',
+          'This guide shows adding bills, editing/deleting, searching, batch delete, and quick actions.',
         ),
         onBeforeEnter: () async {
           await _setTutorialSearchVisible(false);
@@ -973,47 +972,39 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
       HomeTutorialStep(
         id: 'add',
         anchorKey: _tutorialAddButtonKey,
-        title: tr(context, en: 'Add Bill', zh: '新增账单'),
-        message: tr(
-          context,
-          en: 'Tap this button to create a new transaction.',
-          zh: '点击此按钮创建一笔新交易。',
-        ),
+        title: lht(context, 'Add Bill'),
+        message: lht(context, 'Tap this button to create a new transaction.'),
       ),
       HomeTutorialStep(
         id: 'edit_delete',
         anchorKey: hasTransactions ? _tutorialFirstTxKey : null,
-        title: tr(context, en: 'Edit / Delete', zh: '编辑删除'),
+        title: lht(context, 'Edit / Delete'),
         message: hasTransactions
-            ? tr(
+            ? lht(
                 context,
-                en: 'Swipe right on a bill to edit, swipe left to delete.',
-                zh: '账单向右滑可编辑，向左滑可删除。',
+                'Swipe right on a bill to edit, swipe left to delete.',
               )
-            : tr(
+            : lht(
                 context,
-                en: 'No bill yet. Add one first, then you can swipe right to edit and left to delete.',
-                zh: '还没有账单。先新增一条，之后可右滑编辑、左滑删除。',
+                'No bill yet. Add one first, then you can swipe right to edit and left to delete.',
               ),
       ),
       HomeTutorialStep(
         id: 'search_button',
         anchorKey: _tutorialSearchButtonKey,
-        title: tr(context, en: 'Open Search', zh: '打开搜索'),
-        message: tr(
+        title: lht(context, 'Open Search'),
+        message: lht(
           context,
-          en: 'Tap search to expand/collapse the filter panel.',
-          zh: '点击搜索可展开或收起筛选面板。',
+          'Tap search to expand/collapse the filter panel.',
         ),
       ),
       HomeTutorialStep(
         id: 'search_panel',
         anchorKey: _tutorialSearchPanelKey,
-        title: tr(context, en: 'Search & Filters', zh: '搜索与筛选'),
-        message: tr(
+        title: lht(context, 'Search & Filters'),
+        message: lht(
           context,
-          en: 'You can do fuzzy keyword search and combine date/category filters.',
-          zh: '支持关键词模糊搜索，并可组合日期和分类筛选。',
+          'You can do fuzzy keyword search and combine date/category filters.',
         ),
         onBeforeEnter: () async => _setTutorialSearchVisible(true),
       ),
@@ -1021,17 +1012,15 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
         id: 'batch_delete',
         anchorKey: hasTransactions ? _tutorialBatchSelectKey : null,
         secondaryAnchorKey: hasTransactions ? _tutorialBatchDeleteKey : null,
-        title: tr(context, en: 'Batch Delete', zh: '批量删除'),
+        title: lht(context, 'Batch Delete'),
         message: hasTransactions
-            ? tr(
+            ? lht(
                 context,
-                en: 'Long-press a bill to enter selection mode, then use Select all / Delete in the top bar.',
-                zh: '长按账单进入选择模式，然后在顶部使用全选和删除。',
+                'Long-press a bill to enter selection mode, then use Select all / Delete in the top bar.',
               )
-            : tr(
+            : lht(
                 context,
-                en: 'Batch delete appears after long-pressing at least one bill.',
-                zh: '长按至少一条账单后，会显示批量删除功能。',
+                'Batch delete appears after long-pressing at least one bill.',
               ),
         onBeforeEnter: () async => _setTutorialBatchMode(hasTransactions),
       ),
@@ -1039,21 +1028,19 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
         id: 'quick_actions',
         anchorKey: _tutorialSlot3ButtonKey,
         secondaryAnchorKey: _tutorialSlot4ButtonKey,
-        title: tr(context, en: 'Customize Quick Actions', zh: '自定义快捷操作'),
-        message: tr(
+        title: lht(context, 'Customize Quick Actions'),
+        message: lht(
           context,
-          en: 'Slot 3/4 quick actions can be customized from Settings.',
-          zh: '可在设置中自定义第3和第4个快捷按钮。',
+          'Slot 3/4 quick actions can be customized from Settings.',
         ),
         onBeforeEnter: () async => _setTutorialBatchMode(false),
       ),
       HomeTutorialStep(
         id: 'finish',
-        title: tr(context, en: 'All Set', zh: '已完成'),
-        message: tr(
+        title: lht(context, 'All Set'),
+        message: lht(
           context,
-          en: 'You can replay this tutorial anytime from the side menu.',
-          zh: '可随时在侧边菜单重新播放本教程。',
+          'You can replay this tutorial anytime from the side menu.',
         ),
       ),
     ];
@@ -1141,16 +1128,8 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                     alignment: Alignment.topCenter,
                     child: _QuickActionBubble(
                       width: panelWidth,
-                      titleLeft: tr(
-                        context,
-                        en: 'Edit Button $editingSlot',
-                        zh: '编辑按键 $editingSlot',
-                      ),
-                      titleRight: tr(
-                        context,
-                        en: 'Current: $currentLabel',
-                        zh: '当前：$currentLabel',
-                      ),
+                      titleLeft: lht(context, 'Edit Button $editingSlot'),
+                      titleRight: lht(context, 'Current: $currentLabel'),
                       options: options,
                       selectedKey: currentKey,
                       onSelect: (key) =>
@@ -1189,10 +1168,10 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
             onPrevious: _homeTutorialController.index > 0
                 ? () => unawaited(_homeTutorialController.previous())
                 : null,
-            backLabel: tr(context, en: 'Back', zh: '上一步'),
-            skipLabel: tr(context, en: 'Skip', zh: '跳过'),
-            nextLabel: tr(context, en: 'Next', zh: '下一步'),
-            doneLabel: tr(context, en: 'Done', zh: '完成'),
+            backLabel: lht(context, 'Back'),
+            skipLabel: lht(context, 'Skip'),
+            nextLabel: lht(context, 'Next'),
+            doneLabel: lht(context, 'Done'),
           ),
         );
       },
@@ -1275,7 +1254,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
               appBar: AppBar(
                 leading: _selectMode
                     ? IconButton(
-                        tooltip: tr(context, en: 'Cancel', zh: '取消'),
+                        tooltip: lht(context, 'Cancel'),
                         icon: const Icon(Icons.close),
                         onPressed: () {
                           setState(() {
@@ -1285,25 +1264,21 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                         },
                       )
                     : IconButton(
-                        tooltip: tr(context, en: 'Menu', zh: '菜单'),
+                        tooltip: lht(context, 'Menu'),
                         icon: const Icon(Icons.menu_rounded),
                         onPressed: _openDrawer,
                       ),
                 title: Text(
                   _selectMode
-                      ? tr(
-                          context,
-                          en: 'Selected ${_selectedIds.length}',
-                          zh: '已选 ${_selectedIds.length}',
-                        )
-                      : tr(context, en: 'Ledger', zh: '记账'),
+                      ? lht(context, 'Selected ${_selectedIds.length}')
+                      : lht(context, 'Ledger'),
                 ),
                 actions: [
                   if (_selectMode) ...[
                     KeyedSubtree(
                       key: _tutorialBatchSelectKey,
                       child: IconButton(
-                        tooltip: tr(context, en: 'Select all', zh: '全选'),
+                        tooltip: lht(context, 'Select all'),
                         icon: const Icon(Icons.select_all),
                         onPressed: () {
                           setState(() {
@@ -1317,7 +1292,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                     KeyedSubtree(
                       key: _tutorialBatchDeleteKey,
                       child: IconButton(
-                        tooltip: tr(context, en: 'Delete', zh: '删除'),
+                        tooltip: lht(context, 'Delete'),
                         icon: const Icon(Icons.delete_forever),
                         onPressed: _selectedIds.isEmpty
                             ? null
@@ -1326,18 +1301,10 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                                   context: context,
                                   builder: (_) => AlertDialog(
                                     title: Text(
-                                      tr(
-                                        context,
-                                        en: 'Delete selected?',
-                                        zh: '删除已选记录？',
-                                      ),
+                                      lht(context, 'Delete selected?'),
                                     ),
                                     content: Text(
-                                      tr(
-                                        context,
-                                        en: 'This cannot be undone.',
-                                        zh: '此操作无法撤销。',
-                                      ),
+                                      lht(context, 'This cannot be undone.'),
                                     ),
                                     actionsPadding: const EdgeInsets.fromLTRB(
                                       16,
@@ -1369,9 +1336,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                                         ),
                                         onPressed: () =>
                                             Navigator.pop(context, false),
-                                        child: Text(
-                                          tr(context, en: 'Cancel', zh: '取消'),
-                                        ),
+                                        child: Text(lht(context, 'Cancel')),
                                       ),
                                       FilledButton(
                                         style: FilledButton.styleFrom(
@@ -1393,9 +1358,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                                         ),
                                         onPressed: () =>
                                             Navigator.pop(context, true),
-                                        child: Text(
-                                          tr(context, en: 'Delete', zh: '删除'),
-                                        ),
+                                        child: Text(lht(context, 'Delete')),
                                       ),
                                     ],
                                   ),

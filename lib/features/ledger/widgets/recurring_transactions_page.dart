@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/currency.dart';
 import '../../../data/db/app_database.dart';
-import '../../../l10n/tr.dart';
+import 'recurring_transactions_texts.dart';
 
 class RecurringTransactionsPage extends StatefulWidget {
   final AppDatabase db;
@@ -84,34 +84,6 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
     )..where((t) => t.id.equals(rule.id))).go();
   }
 
-  Future<void> _deleteRuleWithConfirm(RecurringTransaction rule) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(tr(context, en: 'Delete recurring item?', zh: '删除周期交易？')),
-        content: Text(
-          tr(
-            context,
-            en: 'Delete "${rule.title}"?',
-            zh: '确定删除“${rule.title}”？',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(tr(context, en: 'Cancel', zh: '取消')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(tr(context, en: 'Delete', zh: '删除')),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await _deleteRuleDirect(rule);
-  }
-
   Future<void> _toggleRule(RecurringTransaction rule, bool enabled) async {
     await (widget.db.update(
       widget.db.recurringTransactions,
@@ -131,12 +103,12 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
   String _freqLabel(String v) {
     switch (v) {
       case 'daily':
-        return tr(context, en: 'Daily', zh: '每天');
+        return rrt(context, 'Daily');
       case 'weekly':
-        return tr(context, en: 'Weekly', zh: '每周');
+        return rrt(context, 'Weekly');
       case 'monthly':
       default:
-        return tr(context, en: 'Monthly', zh: '每月');
+        return rrt(context, 'Monthly');
     }
   }
 
@@ -146,17 +118,17 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
       case 'weekly':
         final wd = r.dayOfWeek ?? 1;
         final weekNames = [
-          tr(context, en: 'Mon', zh: '周一'),
-          tr(context, en: 'Tue', zh: '周二'),
-          tr(context, en: 'Wed', zh: '周三'),
-          tr(context, en: 'Thu', zh: '周四'),
-          tr(context, en: 'Fri', zh: '周五'),
-          tr(context, en: 'Sat', zh: '周六'),
-          tr(context, en: 'Sun', zh: '周日'),
+          rrt(context, 'Mon'),
+          rrt(context, 'Tue'),
+          rrt(context, 'Wed'),
+          rrt(context, 'Thu'),
+          rrt(context, 'Fri'),
+          rrt(context, 'Sat'),
+          rrt(context, 'Sun'),
         ];
         return '${_freqLabel(r.frequency)} ${weekNames[(wd - 1).clamp(0, 6)]} $t';
       case 'monthly':
-        return '${_freqLabel(r.frequency)} ${tr(context, en: 'Day', zh: '第')} ${r.dayOfMonth ?? 1} ${tr(context, en: 'at', zh: '日')} $t';
+        return '${_freqLabel(r.frequency)} ${rrt(context, 'Day')} ${r.dayOfMonth ?? 1} ${rrt(context, 'at')} $t';
       case 'daily':
       default:
         return '${_freqLabel(r.frequency)} $t';
@@ -177,19 +149,13 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
             .watch();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(tr(context, en: 'Recurring Transactions', zh: '周期交易')),
-      ),
+      appBar: AppBar(title: Text(rrt(context, 'Recurring Transactions'))),
       body: StreamBuilder<List<RecurringTransaction>>(
         stream: stream,
         builder: (context, snapshot) {
           final rows = snapshot.data ?? const <RecurringTransaction>[];
           if (rows.isEmpty) {
-            return Center(
-              child: Text(
-                tr(context, en: 'No recurring items yet', zh: '还没有周期交易'),
-              ),
-            );
+            return Center(child: Text(rrt(context, 'No recurring items yet')));
           }
 
           return ListView.separated(
@@ -236,28 +202,16 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
                   final ok = await showDialog<bool>(
                     context: context,
                     builder: (_) => AlertDialog(
-                      title: Text(
-                        tr(
-                          context,
-                          en: 'Delete recurring item?',
-                          zh: '删除周期交易？',
-                        ),
-                      ),
-                      content: Text(
-                        tr(
-                          context,
-                          en: 'Delete "${r.title}"?',
-                          zh: '确定删除“${r.title}”？',
-                        ),
-                      ),
+                      title: Text(rrt(context, 'Delete recurring item?')),
+                      content: Text(rrt(context, 'Delete "${r.title}"?')),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: Text(tr(context, en: 'Cancel', zh: '取消')),
+                          child: Text(rrt(context, 'Cancel')),
                         ),
                         FilledButton(
                           onPressed: () => Navigator.pop(context, true),
-                          child: Text(tr(context, en: 'Delete', zh: '删除')),
+                          child: Text(rrt(context, 'Delete')),
                         ),
                       ],
                     ),
@@ -294,7 +248,7 @@ class _RecurringTransactionsPageState extends State<RecurringTransactionsPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _upsertRule(),
         icon: const Icon(Icons.add_rounded),
-        label: Text(tr(context, en: 'Add Recurring', zh: '新增周期交易')),
+        label: Text(rrt(context, 'Add Recurring')),
       ),
     );
   }
@@ -353,41 +307,20 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
   @override
   Widget build(BuildContext context) {
     final weekItems = <DropdownMenuItem<int>>[
-      DropdownMenuItem(
-        value: 1,
-        child: Text(tr(context, en: 'Monday', zh: '周一')),
-      ),
-      DropdownMenuItem(
-        value: 2,
-        child: Text(tr(context, en: 'Tuesday', zh: '周二')),
-      ),
-      DropdownMenuItem(
-        value: 3,
-        child: Text(tr(context, en: 'Wednesday', zh: '周三')),
-      ),
-      DropdownMenuItem(
-        value: 4,
-        child: Text(tr(context, en: 'Thursday', zh: '周四')),
-      ),
-      DropdownMenuItem(
-        value: 5,
-        child: Text(tr(context, en: 'Friday', zh: '周五')),
-      ),
-      DropdownMenuItem(
-        value: 6,
-        child: Text(tr(context, en: 'Saturday', zh: '周六')),
-      ),
-      DropdownMenuItem(
-        value: 7,
-        child: Text(tr(context, en: 'Sunday', zh: '周日')),
-      ),
+      DropdownMenuItem(value: 1, child: Text(rrt(context, 'Monday'))),
+      DropdownMenuItem(value: 2, child: Text(rrt(context, 'Tuesday'))),
+      DropdownMenuItem(value: 3, child: Text(rrt(context, 'Wednesday'))),
+      DropdownMenuItem(value: 4, child: Text(rrt(context, 'Thursday'))),
+      DropdownMenuItem(value: 5, child: Text(rrt(context, 'Friday'))),
+      DropdownMenuItem(value: 6, child: Text(rrt(context, 'Saturday'))),
+      DropdownMenuItem(value: 7, child: Text(rrt(context, 'Sunday'))),
     ];
 
     return AlertDialog(
       title: Text(
         widget.editing == null
-            ? tr(context, en: 'Add Recurring', zh: '新增周期交易')
-            : tr(context, en: 'Edit Recurring', zh: '编辑周期交易'),
+            ? rrt(context, 'Add Recurring')
+            : rrt(context, 'Edit Recurring'),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -395,9 +328,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
           children: [
             TextField(
               controller: _titleCtrl,
-              decoration: InputDecoration(
-                labelText: tr(context, en: 'Title', zh: '名称'),
-              ),
+              decoration: InputDecoration(labelText: rrt(context, 'Title')),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -406,24 +337,22 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: tr(context, en: 'Amount', zh: '金额'),
+                labelText: rrt(context, 'Amount'),
                 prefixText: '${currencySymbol(widget.accountCurrency)} ',
               ),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _direction,
-              decoration: InputDecoration(
-                labelText: tr(context, en: 'Type', zh: '类型'),
-              ),
+              decoration: InputDecoration(labelText: rrt(context, 'Type')),
               items: [
                 DropdownMenuItem(
                   value: 'expense',
-                  child: Text(tr(context, en: 'Expense', zh: '支出')),
+                  child: Text(rrt(context, 'Expense')),
                 ),
                 DropdownMenuItem(
                   value: 'income',
-                  child: Text(tr(context, en: 'Income', zh: '收入')),
+                  child: Text(rrt(context, 'Income')),
                 ),
               ],
               onChanged: (v) {
@@ -433,21 +362,19 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue: _frequency,
-              decoration: InputDecoration(
-                labelText: tr(context, en: 'Cycle', zh: '周期'),
-              ),
+              decoration: InputDecoration(labelText: rrt(context, 'Cycle')),
               items: [
                 DropdownMenuItem(
                   value: 'daily',
-                  child: Text(tr(context, en: 'Daily', zh: '每天')),
+                  child: Text(rrt(context, 'Daily')),
                 ),
                 DropdownMenuItem(
                   value: 'weekly',
-                  child: Text(tr(context, en: 'Weekly', zh: '每周')),
+                  child: Text(rrt(context, 'Weekly')),
                 ),
                 DropdownMenuItem(
                   value: 'monthly',
-                  child: Text(tr(context, en: 'Monthly', zh: '每月')),
+                  child: Text(rrt(context, 'Monthly')),
                 ),
               ],
               onChanged: (v) {
@@ -458,9 +385,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
                 initialValue: _dayOfWeek,
-                decoration: InputDecoration(
-                  labelText: tr(context, en: 'Weekday', zh: '周几'),
-                ),
+                decoration: InputDecoration(labelText: rrt(context, 'Weekday')),
                 items: weekItems,
                 onChanged: (v) {
                   if (v != null) setState(() => _dayOfWeek = v);
@@ -472,7 +397,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
               DropdownButtonFormField<int>(
                 initialValue: _dayOfMonth,
                 decoration: InputDecoration(
-                  labelText: tr(context, en: 'Day of month', zh: '每月日期'),
+                  labelText: rrt(context, 'Day of month'),
                 ),
                 items: List.generate(
                   28,
@@ -489,7 +414,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
             const SizedBox(height: 10),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(tr(context, en: 'Auto add time', zh: '自动添加时间')),
+              title: Text(rrt(context, 'Auto add time')),
               subtitle: Text(_time.format(context)),
               trailing: IconButton(
                 onPressed: () async {
@@ -507,14 +432,14 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
             TextField(
               controller: _memoCtrl,
               decoration: InputDecoration(
-                labelText: tr(context, en: 'Memo (optional)', zh: '备注（可选）'),
+                labelText: rrt(context, 'Memo (optional)'),
               ),
             ),
             const SizedBox(height: 4),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _isActive,
-              title: Text(tr(context, en: 'Enabled', zh: '启用')),
+              title: Text(rrt(context, 'Enabled')),
               onChanged: (v) => setState(() => _isActive = v),
             ),
           ],
@@ -523,7 +448,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(tr(context, en: 'Cancel', zh: '取消')),
+          child: Text(rrt(context, 'Cancel')),
         ),
         FilledButton(
           onPressed: () {
@@ -550,7 +475,7 @@ class _RuleEditDialogState extends State<_RuleEditDialog> {
               ),
             );
           },
-          child: Text(tr(context, en: 'Save', zh: '保存')),
+          child: Text(rrt(context, 'Save')),
         ),
       ],
     );

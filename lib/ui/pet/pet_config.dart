@@ -24,7 +24,7 @@ class PetConfig extends ChangeNotifier {
   static final PetConfig I = PetConfig._();
 
   // ====== 可配置项 ======
-  bool enabled = true;
+  bool enabled = false;
   PetFrequency frequency = PetFrequency.normal;
   String skinId = 'default';
   int sizeLevel = 2; // 0..4 => 0.5x..1.5x, default 1.0x
@@ -85,7 +85,7 @@ class PetConfig extends ChangeNotifier {
 
   Future<void> load() async {
     final sp = await SharedPreferences.getInstance();
-    enabled = sp.getBool(_kEnabled) ?? true;
+    enabled = sp.getBool(_kEnabled) ?? false;
     skinId = sp.getString(_kSkin) ?? 'default';
     sizeLevel = (sp.getInt(_kSizeLevel) ?? 2).clamp(0, 4).toInt();
     final freqStr = sp.getString(_kFreq) ?? 'normal';

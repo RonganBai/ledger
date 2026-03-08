@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/db/app_database.dart';
+import '../features/auth/auth_local_prefs.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/reset_password_page.dart';
 import '../features/ledger/ledger_home.dart';
@@ -39,6 +40,7 @@ class _MyAppState extends State<MyApp> {
   double _themeBgMist = 0.35;
   ui.Image? _themeBgDecodedImage;
   Session? _session;
+  bool _authReady = false;
   StreamSubscription<AuthState>? _authSub;
   bool _syncingAfterLogin = false;
   bool _inPasswordRecovery = false;
@@ -47,11 +49,7 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     PetConfig.I.load();
-    _session = Supabase.instance.client.auth.currentSession;
-    AppLog.i(
-      'Auth',
-      'Initial session state: ${_session == null ? 'signed_out' : 'signed_in'}',
-    );
+    unawaited(_initAuthSessionGate());
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       if (!mounted) return;
       AppLog.i(
@@ -61,12 +59,16 @@ class _MyAppState extends State<MyApp> {
       if (event.event == AuthChangeEvent.passwordRecovery) {
         setState(() {
           _session = event.session;
+          _authReady = true;
           _inPasswordRecovery = true;
         });
         AppLog.i('Auth', 'Password recovery flow entered');
         return;
       }
-      setState(() => _session = event.session);
+      setState(() {
+        _session = event.session;
+        _authReady = true;
+      });
       if (event.event == AuthChangeEvent.signedOut) {
         setState(() => _inPasswordRecovery = false);
       }
@@ -77,6 +79,28 @@ class _MyAppState extends State<MyApp> {
       }
     });
     _loadThemePrefs();
+  }
+
+  Future<void> _initAuthSessionGate() async {
+    final auth = Supabase.instance.client.auth;
+    Session? session = auth.currentSession;
+    AppLog.i(
+      'Auth',
+      'Initial session state: ${session == null ? 'signed_out' : 'signed_in'}',
+    );
+    if (session != null) {
+      final keep = await AuthLocalPrefs.shouldKeepExistingSession();
+      if (!keep) {
+        await auth.signOut();
+        session = null;
+        AppLog.i('Auth', 'Auto login policy denied persisted session');
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _session = session;
+      _authReady = true;
+    });
   }
 
   Future<void> _syncAfterLogin() async {
@@ -294,7 +318,9 @@ class _MyAppState extends State<MyApp> {
       themeMode: _darkMode ? ThemeMode.dark : ThemeMode.light,
       // Keep route animation short to reduce perceived overlap during rapid taps.
       themeAnimationDuration: const Duration(milliseconds: 120),
-      home: _inPasswordRecovery
+      home: !_authReady
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          : _inPasswordRecovery
           ? ResetPasswordPage(
               onDone: () async {
                 await Supabase.instance.client.auth.signOut();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_log.dart';
+import 'auth_local_prefs.dart';
 
 class LoginPage extends StatefulWidget {
   final VoidCallback? onToggleLocale;
@@ -18,9 +19,12 @@ class _LoginPageState extends State<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
+
   bool _isLoginMode = true;
+  bool _autoLogin30Days = false;
   bool _submitting = false;
   String? _error;
+  List<String> _rememberedEmails = const <String>[];
 
   bool get _isZh =>
       (widget.locale?.languageCode ??
@@ -28,6 +32,24 @@ class _LoginPageState extends State<LoginPage> {
       'zh';
 
   String _t(String en, String zh) => _isZh ? zh : en;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalAuthPrefs();
+  }
+
+  Future<void> _loadLocalAuthPrefs() async {
+    final data = await AuthLocalPrefs.read();
+    if (!mounted) return;
+    setState(() {
+      _autoLogin30Days = data.autoLoginEnabled;
+      _rememberedEmails = data.rememberedEmails;
+      if ((data.lastEmail ?? '').isNotEmpty) {
+        _emailCtrl.text = data.lastEmail!;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -112,6 +134,10 @@ class _LoginPageState extends State<LoginPage> {
         await auth.signInWithPassword(
           email: email,
           password: _passwordCtrl.text,
+        );
+        await AuthLocalPrefs.recordSuccessfulLogin(
+          email: email,
+          autoLogin30Days: _autoLogin30Days,
         );
         AppLog.i('Auth', 'SignIn success. email=$email');
         if (!mounted) return;
@@ -315,6 +341,32 @@ class _LoginPageState extends State<LoginPage> {
                                       prefixIcon: const Icon(
                                         Icons.alternate_email_rounded,
                                       ),
+                                      suffixIcon: _rememberedEmails.isEmpty
+                                          ? null
+                                          : PopupMenuButton<String>(
+                                              tooltip: _t(
+                                                'Choose remembered email',
+                                                '选择已记忆邮箱',
+                                              ),
+                                              icon: const Icon(
+                                                Icons.arrow_drop_down_rounded,
+                                              ),
+                                              onSelected: (v) => setState(
+                                                () => _emailCtrl.text = v,
+                                              ),
+                                              itemBuilder: (_) =>
+                                                  _rememberedEmails
+                                                      .map(
+                                                        (e) =>
+                                                            PopupMenuItem<
+                                                              String
+                                                            >(
+                                                              value: e,
+                                                              child: Text(e),
+                                                            ),
+                                                      )
+                                                      .toList(growable: false),
+                                            ),
                                     ),
                                     validator: (v) {
                                       final text = (v ?? '').trim();
@@ -354,6 +406,34 @@ class _LoginPageState extends State<LoginPage> {
                                       return null;
                                     },
                                   ),
+                                  if (_isLoginMode) ...[
+                                    const SizedBox(height: 6),
+                                    CheckboxListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      value: _autoLogin30Days,
+                                      onChanged: _submitting
+                                          ? null
+                                          : (v) => setState(
+                                              () =>
+                                                  _autoLogin30Days = v ?? false,
+                                            ),
+                                      title: Text(
+                                        _t(
+                                          'Auto login for 30 days',
+                                          '30天内自动登录',
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        _t(
+                                          'If unchecked, login is required each time app starts.',
+                                          '不勾选则每次打开应用都需要重新登录。',
+                                        ),
+                                      ),
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                    ),
+                                  ],
                                   if (!_isLoginMode) ...[
                                     const SizedBox(height: 10),
                                     TextFormField(

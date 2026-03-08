@@ -513,6 +513,10 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final content = _contentController.text.trim();
     final isIncome = _isIncome;
     final cents = (amount * 100).round();
+    final catName = await _categoryNameById(_categoryId);
+    final autoMemo = content.isEmpty
+        ? ((catName?.trim().isNotEmpty ?? false) ? catName!.trim() : null)
+        : null;
 
     late final String savedTxId;
     if (_isEdit) {
@@ -527,6 +531,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           occurredAt: d.Value(_occurredAt),
           categoryId: d.Value(_categoryId),
           merchant: d.Value(content.isEmpty ? null : content),
+          memo: content.isEmpty ? d.Value(autoMemo) : const d.Value.absent(),
           updatedAt: d.Value(DateTime.now()),
         ),
       );
@@ -547,6 +552,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               ),
               categoryId: d.Value(_categoryId),
               merchant: d.Value(content.isEmpty ? null : content),
+              memo: d.Value(autoMemo),
             ),
           );
     }

@@ -21,6 +21,17 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _cloudAccountIdMeta = const VerificationMeta(
+    'cloudAccountId',
+  );
+  @override
+  late final GeneratedColumn<String> cloudAccountId = GeneratedColumn<String>(
+    'cloud_account_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -106,6 +117,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    cloudAccountId,
     name,
     type,
     currency,
@@ -127,6 +139,15 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('cloud_account_id')) {
+      context.handle(
+        _cloudAccountIdMeta,
+        cloudAccountId.isAcceptableOrUnknown(
+          data['cloud_account_id']!,
+          _cloudAccountIdMeta,
+        ),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -172,6 +193,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {cloudAccountId},
+  ];
+  @override
   Account map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Account(
@@ -179,6 +204,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      cloudAccountId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cloud_account_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -214,6 +243,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
 
 class Account extends DataClass implements Insertable<Account> {
   final int id;
+  final String? cloudAccountId;
   final String name;
   final String type;
   final String currency;
@@ -222,6 +252,7 @@ class Account extends DataClass implements Insertable<Account> {
   final DateTime createdAt;
   const Account({
     required this.id,
+    this.cloudAccountId,
     required this.name,
     required this.type,
     required this.currency,
@@ -233,6 +264,9 @@ class Account extends DataClass implements Insertable<Account> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || cloudAccountId != null) {
+      map['cloud_account_id'] = Variable<String>(cloudAccountId);
+    }
     map['name'] = Variable<String>(name);
     map['type'] = Variable<String>(type);
     map['currency'] = Variable<String>(currency);
@@ -245,6 +279,9 @@ class Account extends DataClass implements Insertable<Account> {
   AccountsCompanion toCompanion(bool nullToAbsent) {
     return AccountsCompanion(
       id: Value(id),
+      cloudAccountId: cloudAccountId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cloudAccountId),
       name: Value(name),
       type: Value(type),
       currency: Value(currency),
@@ -261,6 +298,7 @@ class Account extends DataClass implements Insertable<Account> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Account(
       id: serializer.fromJson<int>(json['id']),
+      cloudAccountId: serializer.fromJson<String?>(json['cloudAccountId']),
       name: serializer.fromJson<String>(json['name']),
       type: serializer.fromJson<String>(json['type']),
       currency: serializer.fromJson<String>(json['currency']),
@@ -274,6 +312,7 @@ class Account extends DataClass implements Insertable<Account> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'cloudAccountId': serializer.toJson<String?>(cloudAccountId),
       'name': serializer.toJson<String>(name),
       'type': serializer.toJson<String>(type),
       'currency': serializer.toJson<String>(currency),
@@ -285,6 +324,7 @@ class Account extends DataClass implements Insertable<Account> {
 
   Account copyWith({
     int? id,
+    Value<String?> cloudAccountId = const Value.absent(),
     String? name,
     String? type,
     String? currency,
@@ -293,6 +333,9 @@ class Account extends DataClass implements Insertable<Account> {
     DateTime? createdAt,
   }) => Account(
     id: id ?? this.id,
+    cloudAccountId: cloudAccountId.present
+        ? cloudAccountId.value
+        : this.cloudAccountId,
     name: name ?? this.name,
     type: type ?? this.type,
     currency: currency ?? this.currency,
@@ -303,6 +346,9 @@ class Account extends DataClass implements Insertable<Account> {
   Account copyWithCompanion(AccountsCompanion data) {
     return Account(
       id: data.id.present ? data.id.value : this.id,
+      cloudAccountId: data.cloudAccountId.present
+          ? data.cloudAccountId.value
+          : this.cloudAccountId,
       name: data.name.present ? data.name.value : this.name,
       type: data.type.present ? data.type.value : this.type,
       currency: data.currency.present ? data.currency.value : this.currency,
@@ -316,6 +362,7 @@ class Account extends DataClass implements Insertable<Account> {
   String toString() {
     return (StringBuffer('Account(')
           ..write('id: $id, ')
+          ..write('cloudAccountId: $cloudAccountId, ')
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('currency: $currency, ')
@@ -327,13 +374,22 @@ class Account extends DataClass implements Insertable<Account> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, type, currency, isActive, sortOrder, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    cloudAccountId,
+    name,
+    type,
+    currency,
+    isActive,
+    sortOrder,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Account &&
           other.id == this.id &&
+          other.cloudAccountId == this.cloudAccountId &&
           other.name == this.name &&
           other.type == this.type &&
           other.currency == this.currency &&
@@ -344,6 +400,7 @@ class Account extends DataClass implements Insertable<Account> {
 
 class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<int> id;
+  final Value<String?> cloudAccountId;
   final Value<String> name;
   final Value<String> type;
   final Value<String> currency;
@@ -352,6 +409,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<DateTime> createdAt;
   const AccountsCompanion({
     this.id = const Value.absent(),
+    this.cloudAccountId = const Value.absent(),
     this.name = const Value.absent(),
     this.type = const Value.absent(),
     this.currency = const Value.absent(),
@@ -361,6 +419,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   });
   AccountsCompanion.insert({
     this.id = const Value.absent(),
+    this.cloudAccountId = const Value.absent(),
     required String name,
     this.type = const Value.absent(),
     this.currency = const Value.absent(),
@@ -370,6 +429,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) : name = Value(name);
   static Insertable<Account> custom({
     Expression<int>? id,
+    Expression<String>? cloudAccountId,
     Expression<String>? name,
     Expression<String>? type,
     Expression<String>? currency,
@@ -379,6 +439,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (cloudAccountId != null) 'cloud_account_id': cloudAccountId,
       if (name != null) 'name': name,
       if (type != null) 'type': type,
       if (currency != null) 'currency': currency,
@@ -390,6 +451,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
 
   AccountsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? cloudAccountId,
     Value<String>? name,
     Value<String>? type,
     Value<String>? currency,
@@ -399,6 +461,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) {
     return AccountsCompanion(
       id: id ?? this.id,
+      cloudAccountId: cloudAccountId ?? this.cloudAccountId,
       name: name ?? this.name,
       type: type ?? this.type,
       currency: currency ?? this.currency,
@@ -413,6 +476,9 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (cloudAccountId.present) {
+      map['cloud_account_id'] = Variable<String>(cloudAccountId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -439,6 +505,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   String toString() {
     return (StringBuffer('AccountsCompanion(')
           ..write('id: $id, ')
+          ..write('cloudAccountId: $cloudAccountId, ')
           ..write('name: $name, ')
           ..write('type: $type, ')
           ..write('currency: $currency, ')
@@ -3035,6 +3102,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$AccountsTableCreateCompanionBuilder =
     AccountsCompanion Function({
       Value<int> id,
+      Value<String?> cloudAccountId,
       required String name,
       Value<String> type,
       Value<String> currency,
@@ -3045,6 +3113,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
 typedef $$AccountsTableUpdateCompanionBuilder =
     AccountsCompanion Function({
       Value<int> id,
+      Value<String?> cloudAccountId,
       Value<String> name,
       Value<String> type,
       Value<String> currency,
@@ -3115,6 +3184,11 @@ class $$AccountsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cloudAccountId => $composableBuilder(
+    column: $table.cloudAccountId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3214,6 +3288,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get cloudAccountId => $composableBuilder(
+    column: $table.cloudAccountId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -3256,6 +3335,11 @@ class $$AccountsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get cloudAccountId => $composableBuilder(
+    column: $table.cloudAccountId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -3359,6 +3443,7 @@ class $$AccountsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> cloudAccountId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> type = const Value.absent(),
                 Value<String> currency = const Value.absent(),
@@ -3367,6 +3452,7 @@ class $$AccountsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
+                cloudAccountId: cloudAccountId,
                 name: name,
                 type: type,
                 currency: currency,
@@ -3377,6 +3463,7 @@ class $$AccountsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> cloudAccountId = const Value.absent(),
                 required String name,
                 Value<String> type = const Value.absent(),
                 Value<String> currency = const Value.absent(),
@@ -3385,6 +3472,7 @@ class $$AccountsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
+                cloudAccountId: cloudAccountId,
                 name: name,
                 type: type,
                 currency: currency,
