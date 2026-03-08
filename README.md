@@ -41,7 +41,7 @@ lib/
 supabase/
   ledger_bills_schema.sql  # Supabase schema + RLS policies
 docs/
-  ARCHITECTURE.md      # Module and data-flow notes
+  ARCHITECTURE.en.md   # Module and data-flow notes (English)
 ```
 
 ## Quick Start
@@ -108,8 +108,8 @@ Quick preview of the core flows and pages:
 
 ## Development & Contribution
 
-- Contribution process: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Architecture notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Contribution process: [`CONTRIBUTING.en.md`](CONTRIBUTING.en.md)
+- Architecture notes: [`docs/ARCHITECTURE.en.md`](docs/ARCHITECTURE.en.md)
 - PR template: `.github/PULL_REQUEST_TEMPLATE.md`
 
 ## Suggested Roadmap
