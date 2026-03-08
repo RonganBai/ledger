@@ -1,117 +1,98 @@
 # Ledger App
 
-[中文](README.md) | [English](README.en.md)
-
-## English Introduction
+[English](README.md) | [中文](README.zh-CN.md)
 
 A multi-platform ledger app built with Flutter, supporting offline local bookkeeping, cloud sync, reporting, recurring transactions, and external bill import.
 
-### Highlights
+## Features
 
 - Multi-account ledger management (`income`, `expense`, `pending`)
 - Offline-first local storage with Drift
-- Supabase authentication and cloud synchronization
+- Supabase authentication and cloud bill synchronization
 - Reports and deep analysis (trends, category ratio, history summary)
 - External bill import (WeChat Pay / Alipay / PNC)
 - Recurring transaction management
+- Chinese/English language switching, theme switching, custom background image, and pet overlay UI
 
-### Tech Stack
-
-- `Flutter` / `Dart`
-- `drift` + `sqlite`
-- `supabase_flutter`
-- `fl_chart`
-- `shared_preferences`
-- `image_picker` / `file_picker`
-
-完整英文文档见 [README.en.md](README.en.md)。
-
-## 中文简介
-
-一个基于 Flutter 的多端记账应用，支持本地离线账本、云同步、报表分析、定期交易和外部账单导入。
-
-### 功能概览
-
-- 多账户账本管理（收入、支出、待确认）
-- Drift 本地数据库存储（离线可用）
-- Supabase 账号登录与云端账单同步
-- 统计与深度分析（趋势、分类占比、历史汇总）
-- 微信/支付宝/PNC 等账单文件导入
-- 定期交易管理
-- 中英文切换、主题切换、背景图与桌宠展示
-
-### 技术栈
+## Tech Stack
 
 - `Flutter` / `Dart`
-- `drift` + `sqlite`（本地数据）
-- `supabase_flutter`（鉴权与云同步）
-- `fl_chart`（图表）
-- `shared_preferences`（配置持久化）
-- `image_picker` / `file_picker`（图片与文件导入）
+- `drift` + `sqlite` (local data)
+- `supabase_flutter` (auth + cloud sync)
+- `fl_chart` (charts)
+- `shared_preferences` (persistent settings)
+- `image_picker` / `file_picker` (image & file import)
 
-## 目录结构
+## Project Structure
 
 ```text
 lib/
-  app/                 # 应用层配置（主题、设置、入口壳）
-  data/db/             # Drift 数据库与表定义
+  app/                 # App-level config (theme, settings, app shell)
+  data/db/             # Drift database and table definitions
   features/
-    auth/              # 登录/重置密码
-    ledger/            # 记账主页与交易管理
-    reports/           # 报表与分析
-    import/            # 外部账单导入
-    settings/          # 设置与偏好
-  services/            # 云同步、后台服务、日志
-  ui/pet/              # 桌宠相关 UI/控制逻辑
+    auth/              # Login / password reset
+    ledger/            # Ledger home and transaction flows
+    reports/           # Reporting and analytics
+    import/            # External bill import
+    settings/          # Settings and preferences
+  services/            # Cloud sync, background services, logging
+  ui/pet/              # Pet overlay UI and control logic
 supabase/
-  ledger_bills_schema.sql  # Supabase 表结构与 RLS 策略
+  ledger_bills_schema.sql  # Supabase schema + RLS policies
 docs/
-  ARCHITECTURE.md      # 模块与数据流说明
+  ARCHITECTURE.md      # Module and data-flow notes
 ```
 
-## 快速开始
+## Quick Start
 
-1. 安装 Flutter 3.35+，并确保 `dart --version` >= `3.11.x`。
-2. 获取依赖：
+1. Install Flutter 3.35+ and ensure `dart --version` is `>= 3.11.x`.
+2. Install dependencies:
 
 ```bash
 flutter pub get
 ```
 
-3. 运行应用：
+3. Run the app:
 
 ```bash
 flutter run
 ```
 
-## 云同步初始化（Supabase）
+## Supabase Setup
 
-1. 在 Supabase 创建项目。
-2. 执行 [`supabase/ledger_bills_schema.sql`](supabase/ledger_bills_schema.sql)。
-3. 将 `lib/main.dart` 中的 `Supabase.initialize(url, anonKey)` 替换为你自己的项目配置。
+1. Create a Supabase project.
+2. Run [`supabase/ledger_bills_schema.sql`](supabase/ledger_bills_schema.sql) in the SQL editor.
+3. Replace `Supabase.initialize(url, anonKey)` in `lib/main.dart` with your project config.
 
-建议在公开仓库中避免硬编码项目密钥，可改造为环境变量或构建参数注入。
+For public repositories, avoid hardcoding project keys. Prefer environment variables or build-time injection.
 
-## 演示素材占位
+## Demo Assets Placeholder
 
-你可以手动补充以下资源（推荐）：
+You can add these files manually:
 
-- `docs/media/demo.gif`（主流程演示）
-- `docs/media/home.png`（主页截图）
-- `docs/media/report.png`（报表截图）
+- `docs/media/demo.gif`
+- `docs/media/home.png`
+- `docs/media/report.png`
 
-然后在 README 中按需插入：
+And embed in README:
 
 ```md
 ![Demo](docs/media/demo.gif)
 ```
 
-## 开发与贡献
+## Development & Contribution
 
-- 贡献流程见 [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- 架构说明见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Pull Request 模板：`.github/PULL_REQUEST_TEMPLATE.md`
+- Contribution process: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Architecture notes: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- PR template: `.github/PULL_REQUEST_TEMPLATE.md`
+
+## Suggested Roadmap
+
+- Improve cloud sync conflict strategy
+- Increase unit/integration test coverage
+- Make bill import rules configurable
+- Standardize release and changelog workflow
 
 ## License
 
-本项目使用 [MIT License](LICENSE)。
+This project is licensed under [MIT License](LICENSE).
