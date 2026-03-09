@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_log.dart';
+import 'auth_redirect.dart';
 
 enum _ResetStep { requestCode, verifyCode, setPassword }
 
@@ -29,6 +30,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   String? _error;
   int _resendCooldown = 0;
   Timer? _resendTimer;
+  String? _maskedTargetEmail;
 
   @override
   void initState() {
@@ -63,6 +65,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     });
   }
 
+  String _maskEmail(String email) {
+    final at = email.indexOf('@');
+    if (at <= 1 || at >= email.length - 1) return email;
+    final name = email.substring(0, at);
+    final domain = email.substring(at);
+    if (name.length <= 2) {
+      return '${name[0]}*$domain';
+    }
+    return '${name[0]}${'*' * (name.length - 2)}${name[name.length - 1]}$domain';
+  }
+
   Future<void> _sendCode() async {
     final email = _emailCtrl.text.trim();
     if (email.isEmpty || !email.contains('@')) {
@@ -74,12 +87,19 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kAuthRecoveryRedirectTo,
+      );
       if (!mounted) return;
-      setState(() => _step = _ResetStep.verifyCode);
+      final masked = _maskEmail(email);
+      setState(() {
+        _step = _ResetStep.verifyCode;
+        _maskedTargetEmail = masked;
+      });
       _startResendCooldown(180);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification code sent')),
+        SnackBar(content: Text('Verification code sent to $masked')),
       );
       AppLog.i('Auth', 'Reset OTP sent');
     } on AuthException catch (e) {
@@ -178,49 +198,50 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final insets = MediaQuery.of(context).viewInsets.bottom;
-    final keyboardVisible = insets > 0;
+
     return Scaffold(
       appBar: AppBar(title: Text(_title())),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              padding: EdgeInsets.only(bottom: insets),
-              child: SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight - 40),
-                  child: AnimatedAlign(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    alignment: keyboardVisible
-                        ? Alignment.topCenter
-                        : Alignment.center,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(22),
-                          side: BorderSide(color: cs.outlineVariant),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(bottom: insets),
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Text(
                             _title(),
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+                          if (_step != _ResetStep.requestCode &&
+                              _maskedTargetEmail != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Code sent to $_maskedTargetEmail',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _emailCtrl,
@@ -330,8 +351,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                           if (_step == _ResetStep.verifyCode) ...[
                             const SizedBox(height: 8),
                             OutlinedButton(
-                              onPressed:
-                                  (_submitting || _resendCooldown > 0)
+                              onPressed: (_submitting || _resendCooldown > 0)
                                   ? null
                                   : _sendCode,
                               child: Text(
@@ -348,17 +368,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                                 : () => Navigator.of(context).maybePop(),
                             child: const Text('Back to login'),
                           ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );

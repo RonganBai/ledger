@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../app/settings.dart';
 import '../../app/theme.dart';
 import '../../data/db/app_database.dart';
+import '../auth/auth_redirect.dart';
 import 'settings_texts.dart';
 import '../../services/cloud_bill_sync_service.dart';
 import '../../ui/pet/pet_config.dart';
@@ -1085,12 +1086,22 @@ class _AccountSecurityPage extends StatelessWidget {
   }
 }
 
+String _maskEmailForDisplay(String email) {
+  final at = email.indexOf('@');
+  if (at <= 1 || at >= email.length - 1) return email;
+  final name = email.substring(0, at);
+  final domain = email.substring(at);
+  if (name.length <= 2) return '${name[0]}*$domain';
+  return '${name[0]}${'*' * (name.length - 2)}${name[name.length - 1]}$domain';
+}
+
 class _VerificationPanel extends StatelessWidget {
   final TextEditingController codeController;
   final bool sending;
   final bool verifying;
   final bool verified;
   final int resendCooldown;
+  final String? note;
   final VoidCallback onSendCode;
   final VoidCallback onVerifyCode;
 
@@ -1102,6 +1113,7 @@ class _VerificationPanel extends StatelessWidget {
     required this.resendCooldown,
     required this.onSendCode,
     required this.onVerifyCode,
+    this.note,
   });
 
   @override
@@ -1111,7 +1123,17 @@ class _VerificationPanel extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (note != null) ...[
+              Text(
+                note!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             TextField(
               controller: codeController,
               keyboardType: TextInputType.number,
@@ -1237,15 +1259,16 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.signInWithOtp(
-        email: email,
-        shouldCreateUser: false,
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kAuthRecoveryRedirectTo,
       );
       if (!mounted) return;
+      final masked = _maskEmailForDisplay(email);
       _startResendCooldown(180);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(st(context, 'Verification code sent to $email')),
+          content: Text(st(context, 'Verification code sent to $masked')),
         ),
       );
     } on AuthException catch (e) {
@@ -1280,7 +1303,7 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
       await Supabase.instance.client.auth.verifyOTP(
         email: email,
         token: code,
-        type: OtpType.email,
+        type: OtpType.recovery,
       );
       if (!mounted) return;
       setState(() => _verified = true);
@@ -1345,12 +1368,13 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
   @override
   Widget build(BuildContext context) {
     final email = _currentEmail ?? '-';
+    final maskedEmail = _maskEmailForDisplay(email);
     return Scaffold(
       appBar: AppBar(title: Text(st(context, 'Change Password'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(st(context, 'Current bound email: $email')),
+          Text(st(context, 'Current bound email: $maskedEmail')),
           const SizedBox(height: 12),
           _VerificationPanel(
             codeController: _codeCtrl,
@@ -1358,27 +1382,30 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
             verifying: _verifying,
             verified: _verified,
             resendCooldown: _resendCooldown,
+            note: st(context, 'Verification code sent to $maskedEmail'),
             onSendCode: _sendCode,
             onVerifyCode: _verifyCode,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _newPwdCtrl,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: st(context, 'New Password'),
-              prefixIcon: const Icon(Icons.lock_rounded),
+          if (_verified) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newPwdCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: st(context, 'New Password'),
+                prefixIcon: const Icon(Icons.lock_rounded),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _confirmCtrl,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: st(context, 'Confirm Password'),
-              prefixIcon: const Icon(Icons.verified_user_rounded),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _confirmCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: st(context, 'Confirm Password'),
+                prefixIcon: const Icon(Icons.verified_user_rounded),
+              ),
             ),
-          ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -1386,15 +1413,17 @@ class _ChangePasswordPageState extends State<_ChangePasswordPage> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: Text(
-              _saving
-                  ? st(context, 'Saving...')
-                  : st(context, 'Update Password'),
+          if (_verified) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(
+                _saving
+                    ? st(context, 'Saving...')
+                    : st(context, 'Update Password'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1458,15 +1487,16 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.signInWithOtp(
-        email: email,
-        shouldCreateUser: false,
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: kAuthRecoveryRedirectTo,
       );
       if (!mounted) return;
+      final masked = _maskEmailForDisplay(email);
       _startResendCooldown(180);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(st(context, 'Verification code sent to $email')),
+          content: Text(st(context, 'Verification code sent to $masked')),
         ),
       );
     } on AuthException catch (e) {
@@ -1501,7 +1531,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
       await Supabase.instance.client.auth.verifyOTP(
         email: email,
         token: code,
-        type: OtpType.email,
+        type: OtpType.recovery,
       );
       if (!mounted) return;
       setState(() => _verified = true);
@@ -1545,6 +1575,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
     try {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(email: newEmail),
+        emailRedirectTo: kAuthEmailRedirectTo,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1552,7 +1583,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
           content: Text(
             st(
               context,
-              'Bound email update requested. Please check mailbox confirmation.',
+              'Bound email updated. Please login again.',
             ),
           ),
         ),
@@ -1572,12 +1603,13 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
   @override
   Widget build(BuildContext context) {
     final email = _currentEmail ?? '-';
+    final maskedEmail = _maskEmailForDisplay(email);
     return Scaffold(
       appBar: AppBar(title: Text(st(context, 'Change Bound Email'))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(st(context, 'Current bound email: $email')),
+          Text(st(context, 'Current bound email: $maskedEmail')),
           const SizedBox(height: 12),
           _VerificationPanel(
             codeController: _codeCtrl,
@@ -1585,18 +1617,21 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
             verifying: _verifying,
             verified: _verified,
             resendCooldown: _resendCooldown,
+            note: st(context, 'Verification code sent to $maskedEmail'),
             onSendCode: _sendCode,
             onVerifyCode: _verifyCode,
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _newEmailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(
-              labelText: st(context, 'New Email'),
-              prefixIcon: const Icon(Icons.email_rounded),
+          if (_verified) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newEmailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: st(context, 'New Email'),
+                prefixIcon: const Icon(Icons.email_rounded),
+              ),
             ),
-          ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -1604,15 +1639,17 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            child: Text(
-              _saving
-                  ? st(context, 'Saving...')
-                  : st(context, 'Update Bound Email'),
+          if (_verified) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(
+                _saving
+                    ? st(context, 'Saving...')
+                    : st(context, 'Update Bound Email'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

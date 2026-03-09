@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_log.dart';
 import 'auth_local_prefs.dart';
+import 'auth_redirect.dart';
 import 'reset_password_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -98,6 +99,7 @@ class _LoginPageState extends State<LoginPage> {
       if (email == null || email.isEmpty) return;
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
+        redirectTo: kAuthRecoveryRedirectTo,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -159,6 +161,7 @@ class _LoginPageState extends State<LoginPage> {
         final response = await auth.signUp(
           email: email,
           password: _passwordCtrl.text,
+          emailRedirectTo: kAuthEmailRedirectTo,
         );
         final verified = response.user?.emailConfirmedAt != null;
         if (!verified) {
