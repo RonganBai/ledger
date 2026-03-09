@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'app/app_version.dart';
 import 'data/db/app_database.dart';
 import 'features/reports/report_service.dart';
 import 'services/app_log.dart';
@@ -10,6 +11,7 @@ import 'services/background_runtime_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppLog.i('Bootstrap', 'App startup begin');
+  await loadAppVersion();
   var supabaseReady = false;
 
   try {

@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/settings.dart';
 import '../../app/theme.dart';
+import '../../app/app_version.dart';
 import '../../data/db/app_database.dart';
 import '../auth/auth_redirect.dart';
 import 'settings_texts.dart';
@@ -271,6 +272,18 @@ class _SettingsPageState extends State<SettingsPage> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                ValueListenableBuilder<String>(
+                  valueListenable: appVersionText,
+                  builder: (context, version, _) => Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 8),
+                    child: Text(
+                      'Current Version: $version',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
                 if (widget.onToggleLocale != null)
                   Card(
                     child: SwitchListTile(

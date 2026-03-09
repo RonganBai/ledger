@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_version.dart';
 import 'ledger_side_menu_texts.dart';
 
 class LedgerSideMenu extends StatelessWidget {
@@ -131,6 +132,19 @@ class LedgerSideMenu extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 6, 18, 4),
+                        child: ValueListenableBuilder<String>(
+                          valueListenable: appVersionText,
+                          builder: (context, version, _) => Text(
+                            'Current Version: $version',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                          ),
+                        ),
+                      ),
                       groupTitle(lsmt(context, 'Accounts')),
                       card(
                         children: [
