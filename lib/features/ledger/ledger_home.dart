@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -6,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' as d;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/currency.dart';
 import '../../app/settings.dart';
@@ -23,6 +26,7 @@ import 'models.dart';
 import '../reports/history_page.dart';
 import '../reports/deep_analysis_page.dart';
 import '../settings/settings_page.dart';
+import '../settings/account_management_page.dart';
 import '../import/external_bill_import_page.dart';
 
 import 'recurring_transaction_service.dart';
@@ -274,6 +278,80 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
     setState(() {});
   }
 
+  Future<void> _exportFilteredResults() async {
+    final accountId = _currentAccountId;
+    if (accountId == null) return;
+    final db = widget.db;
+    final query =
+        (db.select(db.transactions)
+              ..where((t) => t.accountId.equals(accountId))
+              ..orderBy([
+                (t) => d.OrderingTerm(
+                  expression: t.occurredAt,
+                  mode: d.OrderingMode.desc,
+                ),
+              ]))
+            .join([
+              d.leftOuterJoin(
+                db.categories,
+                db.categories.id.equalsExp(db.transactions.categoryId),
+              ),
+            ]);
+    final rows = await query.get();
+    final all = rows
+        .map(
+          (r) => TxViewRow(
+            tx: r.readTable(db.transactions),
+            category: r.readTableOrNull(db.categories),
+          ),
+        )
+        .toList(growable: false);
+    final filtered = _applyFilters(all);
+    if (filtered.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No matched records to export.')),
+      );
+      return;
+    }
+    final csv = StringBuffer();
+    csv.writeln(
+      'id,date,direction,amount,currency,category,merchant,memo,source,source_id',
+    );
+    String esc(String? s) {
+      final v = (s ?? '').replaceAll('"', '""');
+      return '"$v"';
+    }
+
+    for (final row in filtered) {
+      final tx = row.tx;
+      final amount = (tx.amountCents / 100.0).toStringAsFixed(2);
+      final category = row.category?.name ?? '';
+      csv.writeln(
+        [
+          esc(tx.id),
+          esc(tx.occurredAt.toIso8601String()),
+          esc(tx.direction),
+          esc(amount),
+          esc(tx.currency),
+          esc(category),
+          esc(tx.merchant),
+          esc(tx.memo),
+          esc(tx.source),
+          esc(tx.sourceId),
+        ].join(','),
+      );
+    }
+    final dir = await getApplicationDocumentsDirectory();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final now = DateTime.now();
+    final name =
+        'ledger_search_${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}${two(now.second)}.csv';
+    final file = File('${dir.path}${Platform.pathSeparator}$name');
+    await file.writeAsString(csv.toString(), flush: true);
+    await Share.shareXFiles([XFile(file.path)]);
+  }
+
   void _openStats() => _pageCtrl.animateToPage(
     1,
     duration: const Duration(milliseconds: 320),
@@ -348,13 +426,12 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<int> _ensureDefaultAccount() async {
-    final existing =
-        await (widget.db.select(widget.db.accounts)
-              ..where((a) => a.isActive.equals(true))
-              ..orderBy([(a) => d.OrderingTerm(expression: a.id)]))
-            .get();
+    final existing = await (widget.db.select(
+      widget.db.accounts,
+    )..orderBy([(a) => d.OrderingTerm(expression: a.id)])).get();
     if (existing.isNotEmpty) {
-      return existing.first.id;
+      final active = existing.where((a) => a.isActive).toList(growable: false);
+      return (active.isNotEmpty ? active.first : existing.first).id;
     }
     final id = await widget.db
         .into(widget.db.accounts)
@@ -1641,6 +1718,9 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                                   _filter = next;
                                 });
                               },
+                              onExportPressed: () {
+                                unawaited(_exportFilteredResults());
+                              },
                             ),
                           )
                         : const SizedBox.shrink(),
@@ -1755,17 +1835,14 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                 onTapScrim: _closeDrawer,
                 drawer: SafeArea(
                   child: LedgerSideMenu(
-                    onSwitchAccount: () async {
-                      _closeDrawer();
-                      await _switchAccountFromSheet();
-                    },
-                    onManageAccounts: () async {
+                    onOpenAccountManagement: () async {
                       _closeDrawer();
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => AccountManagePage(
-                            db: db,
+                          builder: (_) => AccountManagementPage(
+                            db: widget.db,
+                            isGuestMode: widget.isGuestMode,
                             onAccountCreated: _uploadCreatedAccountToCloud,
                             onAccountUpdated: _uploadUpdatedAccountToCloud,
                             onAccountDeleted: _uploadDeletedAccountToCloud,
@@ -1773,6 +1850,11 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                         ),
                       );
                       await _initCurrentAccount();
+                      _refreshHome();
+                    },
+                    onSwitchAccount: () async {
+                      _closeDrawer();
+                      await _switchAccountFromSheet();
                     },
                     onOpenStats: () {
                       _closeDrawer();

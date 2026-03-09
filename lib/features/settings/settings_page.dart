@@ -16,6 +16,7 @@ import 'settings_texts.dart';
 import '../../services/cloud_bill_sync_service.dart';
 import '../../ui/pet/pet_config.dart';
 import 'import_export_service.dart';
+import 'sync_conflict_log_page.dart';
 
 enum QuickActionKey {
   stats,
@@ -410,28 +411,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                       const Divider(height: 1),
                       ListTile(
-                        title: Text(st(context, 'Account Security')),
-                        subtitle: widget.isGuestMode
-                            ? Text(
-                                st(
-                                  context,
-                                  'Guest mode: account security is unavailable.',
-                                ),
-                              )
-                            : null,
-                        trailing: Icon(
-                          widget.isGuestMode
-                              ? Icons.block_rounded
-                              : Icons.chevron_right,
+                        title: Text(st(context, 'Sync Conflict Log')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SyncConflictLogPage(),
+                          ),
                         ),
-                        enabled: !widget.isGuestMode,
-                        onTap: widget.isGuestMode
-                            ? null
-                            : () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const _AccountSecurityPage(),
-                                ),
-                              ),
                       ),
                     ],
                   ),
@@ -1020,6 +1006,30 @@ class _ImportExportPage extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton(
             onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: Text(st(context, 'Clear All Stored Bills')),
+                  content: Text(
+                    st(
+                      context,
+                      'This will permanently delete local bills, and cloud bills if signed in. Continue?',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: Text(st(context, 'Cancel')),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: Text(st(context, 'Delete')),
+                    ),
+                  ],
+                ),
+              );
+              if (ok != true) return;
+
               final deleted = await svc.clearStoredBillData();
               var cloudDeleted = 0;
               if (!isGuestMode &&
@@ -1052,6 +1062,7 @@ class _ImportExportPage extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _AccountSecurityPage extends StatelessWidget {
   const _AccountSecurityPage();
 
@@ -1141,9 +1152,9 @@ class _VerificationPanel extends StatelessWidget {
             if (note != null) ...[
               Text(
                 note!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 10),
             ],
@@ -1168,10 +1179,7 @@ class _VerificationPanel extends StatelessWidget {
                       sending
                           ? st(context, 'Sending...')
                           : (resendCooldown > 0
-                                ? st(
-                                    context,
-                                    'Resend in ${resendCooldown}s',
-                                  )
+                                ? st(context, 'Resend in ${resendCooldown}s')
                                 : st(context, 'Send Code')),
                     ),
                   ),
@@ -1594,10 +1602,7 @@ class _ChangeEmailPageState extends State<_ChangeEmailPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            st(
-              context,
-              'Bound email updated. Please login again.',
-            ),
+            st(context, 'Bound email updated. Please login again.'),
           ),
         ),
       );

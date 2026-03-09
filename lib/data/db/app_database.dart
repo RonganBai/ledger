@@ -48,18 +48,18 @@ class AppDatabase extends _$AppDatabase {
   );
 
   Future<void> _seedDefaults() async {
-    // 榛樿璐︽埛
-    await into(accounts).insert(
-      AccountsCompanion.insert(name: 'Cash', type: const Value('cash')),
-      mode: InsertMode.insertOrIgnore,
-    );
+    final accountCountExpr = accounts.id.count();
+    final accountCountRow = await (selectOnly(
+      accounts,
+    )..addColumns([accountCountExpr])).getSingle();
+    final accountCount = accountCountRow.read(accountCountExpr) ?? 0;
+    if (accountCount == 0) {
+      await into(accounts).insert(
+        AccountsCompanion.insert(name: 'Cash', type: const Value('cash')),
+      );
+    }
 
-    await into(accounts).insert(
-      AccountsCompanion.insert(name: 'PayPal', type: const Value('paypal')),
-      mode: InsertMode.insertOrIgnore,
-    );
-
-    // 榛樿鏀嚭鍒嗙被
+    // 姒涙顓婚弨顖氬毉閸掑棛琚?
     const expenseCategories = [
       'food',
       'transport',
@@ -85,7 +85,7 @@ class AppDatabase extends _$AppDatabase {
       );
     }
 
-    // 榛樿鏀跺叆鍒嗙被
+    // 姒涙顓婚弨璺哄弳閸掑棛琚?
     const incomeCategories = ['salary', 'refund', 'gift', 'transfer', 'other'];
 
     for (final name in incomeCategories) {
@@ -103,20 +103,20 @@ class AppDatabase extends _$AppDatabase {
     // Normalize existing category names (English/Chinese) to stable keys.
     // This keeps your UI fully i18n-driven and avoids mixed-language lists.
     const pairs = <String, List<String>>{
-      'food': ['Food', 'FOOD', '餐饮'],
-      'transport': ['Transport', 'TRANSPORT', '交通'],
-      'shopping': ['Shopping', 'SHOPPING', '购物'],
-      'bills': ['Bills', 'BILLS', '账单', '缴费'],
-      'entertainment': ['Entertainment', 'ENTERTAINMENT', '娱乐'],
-      'health': ['Health', 'HEALTH', '医疗', '健康'],
-      'salary': ['Salary', 'SALARY', '工资'],
-      'refund': ['Refund', 'REFUND', '退款'],
-      'rent': ['Rent', 'RENT', '房租'],
-      'utilities': ['Utilities', 'UTILITIES', '水电'],
-      'travel': ['Travel', 'TRAVEL', '旅行'],
-      'gift': ['Gift', 'GIFT', '礼物'],
-      'transfer': ['Transfer', 'TRANSFER', '转账'],
-      'other': ['Other', 'OTHER', '其他'],
+      'food': ['Food', 'FOOD'],
+      'transport': ['Transport', 'TRANSPORT'],
+      'shopping': ['Shopping', 'SHOPPING'],
+      'bills': ['Bills', 'BILLS'],
+      'entertainment': ['Entertainment', 'ENTERTAINMENT'],
+      'health': ['Health', 'HEALTH'],
+      'salary': ['Salary', 'SALARY'],
+      'refund': ['Refund', 'REFUND'],
+      'rent': ['Rent', 'RENT'],
+      'utilities': ['Utilities', 'UTILITIES'],
+      'travel': ['Travel', 'TRAVEL'],
+      'gift': ['Gift', 'GIFT'],
+      'transfer': ['Transfer', 'TRANSFER'],
+      'other': ['Other', 'OTHER'],
     };
 
     for (final entry in pairs.entries) {

@@ -4,6 +4,7 @@ import '../../../l10n/tr.dart';
 
 const Map<String, String> _kSideMenuZh = <String, String>{
   'Accounts': '\u8d26\u6237',
+  'Account Management': '\u8d26\u6237\u7ba1\u7406',
   'Switch Account': '\u5207\u6362\u8d26\u6237',
   'Manage Accounts': '\u8d26\u6237\u7ba1\u7406',
   'Navigate': '\u5bfc\u822a',

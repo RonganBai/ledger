@@ -1,53 +1,70 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import 'import_export_service.dart';
 import '../../data/db/app_database.dart';
+import '../../services/app_log.dart';
+import 'import_export_service.dart';
 
 class AutoBackupService {
   AutoBackupService._();
-  static final I = AutoBackupService._();
 
-  Timer? _debounce;
+  static final AutoBackupService I = AutoBackupService._();
+  static const String _dailyFolderName = 'ledger_backups/daily';
 
-  /// 自动备份文件：更新 App 不会丢（Documents 目录）
-  Future<File> _autoLatestFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final folder = Directory(p.join(dir.path, 'ledger_backups'));
-    if (!await folder.exists()) await folder.create(recursive: true);
-    return File(p.join(folder.path, 'auto_latest.json'));
-  }
+  Future<void> runDailyBackupIfNeeded(
+    AppDatabase db, {
+    int retentionDays = 14,
+  }) async {
+    final today = _yyyyMmDd(DateTime.now().toUtc());
+    final folder = await _dailyBackupFolder();
+    final todayFile = File(
+      '${folder.path}${Platform.pathSeparator}backup_$today.json',
+    );
 
-  /// 触发一次“延迟写入”（防抖：多次编辑只写一次）
-  void scheduleBackup(AppDatabase db, {Duration debounce = const Duration(milliseconds: 800)}) {
-    _debounce?.cancel();
-    _debounce = Timer(debounce, () async {
-      await writeLatestNow(db);
-    });
-  }
+    if (await todayFile.exists()) {
+      await _cleanupOldBackups(folder, retentionDays: retentionDays);
+      return;
+    }
 
-  /// 立即写入 latest（复用你现有的导出 JSON）
-  Future<void> writeLatestNow(AppDatabase db) async {
     final svc = ImportExportService(db);
     final jsonString = await svc.exportFullBackupJsonString();
-    final file = await _autoLatestFile();
-    await _writeAtomic(file, jsonString);
-
-    // ✅ 加在这里（写入完成之后）
-    final len = await file.length();
-    // ignore: avoid_print
-    print('[AutoBackup] saved: ${file.path} (${len} bytes)');
+    await _writeAtomic(todayFile, jsonString);
+    await _cleanupOldBackups(folder, retentionDays: retentionDays);
+    AppLog.i('AutoBackup', 'Daily backup created: ${todayFile.path}');
   }
 
-  Future<Map<String, dynamic>?> readLatest() async {
-    final file = await _autoLatestFile();
-    if (!await file.exists()) return null;
-    final s = await file.readAsString();
-    return jsonDecode(s) as Map<String, dynamic>;
+  Future<Directory> _dailyBackupFolder() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final folder = Directory(
+      '${dir.path}${Platform.pathSeparator}${_dailyFolderName.replaceAll('/', Platform.pathSeparator)}',
+    );
+    if (!await folder.exists()) {
+      await folder.create(recursive: true);
+    }
+    return folder;
+  }
+
+  Future<void> _cleanupOldBackups(
+    Directory folder, {
+    required int retentionDays,
+  }) async {
+    final files = await folder
+        .list()
+        .where((e) => e is File && e.path.toLowerCase().endsWith('.json'))
+        .cast<File>()
+        .toList();
+    if (files.isEmpty) return;
+
+    files.sort((a, b) => b.path.compareTo(a.path));
+    final maxKeep = retentionDays < 1 ? 1 : retentionDays;
+    for (int i = maxKeep; i < files.length; i++) {
+      try {
+        await files[i].delete();
+      } catch (_) {
+        // keep non-fatal cleanup failures silent
+      }
+    }
   }
 
   Future<void> _writeAtomic(File file, String content) async {
@@ -59,7 +76,8 @@ class AutoBackupService {
     await tmp.rename(file.path);
   }
 
-  void dispose() {
-    _debounce?.cancel();
+  String _yyyyMmDd(DateTime dt) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}${two(dt.month)}${two(dt.day)}';
   }
 }

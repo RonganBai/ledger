@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' as d;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../data/db/app_database.dart';
 import '../../../l10n/tr.dart';
@@ -40,6 +44,7 @@ class LedgerSearchPanel extends StatefulWidget {
   final Key? keywordFieldKey;
   final Key? resetButtonKey;
   final VoidCallback? onResetPressed;
+  final VoidCallback? onExportPressed;
 
   const LedgerSearchPanel({
     super.key,
@@ -50,6 +55,7 @@ class LedgerSearchPanel extends StatefulWidget {
     this.keywordFieldKey,
     this.resetButtonKey,
     this.onResetPressed,
+    this.onExportPressed,
   });
 
   @override
@@ -57,8 +63,10 @@ class LedgerSearchPanel extends StatefulWidget {
 }
 
 class _LedgerSearchPanelState extends State<LedgerSearchPanel> {
+  static const String _kSavedViews = 'ledger_saved_filter_views_v1';
   late final TextEditingController _keywordCtrl;
   late LedgerFilterState _state;
+  List<_SavedFilterView> _savedViews = const <_SavedFilterView>[];
 
   @override
   void initState() {
@@ -70,6 +78,7 @@ class _LedgerSearchPanelState extends State<LedgerSearchPanel> {
       if (v == _state.keyword) return;
       _emit(_state.copyWith(keyword: v));
     });
+    unawaited(_loadSavedViews());
   }
 
   @override
@@ -94,6 +103,126 @@ class _LedgerSearchPanelState extends State<LedgerSearchPanel> {
   void _emit(LedgerFilterState next) {
     setState(() => _state = next);
     widget.onChanged(next);
+  }
+
+  Future<void> _loadSavedViews() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_kSavedViews) ?? const <String>[];
+    final views = <_SavedFilterView>[];
+    for (final item in raw) {
+      try {
+        views.add(
+          _SavedFilterView.fromJson(jsonDecode(item) as Map<String, dynamic>),
+        );
+      } catch (_) {
+        // ignore malformed row
+      }
+    }
+    if (!mounted) return;
+    setState(() => _savedViews = views);
+  }
+
+  Future<void> _saveSavedViews() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = _savedViews
+        .map((e) => jsonEncode(e.toJson()))
+        .toList(growable: false);
+    await prefs.setStringList(_kSavedViews, raw);
+  }
+
+  Future<void> _saveCurrentView() async {
+    if (!_state.hasAny) return;
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(tr(context, en: 'Save Filter View', zh: '保存筛选视图')),
+        content: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(
+            labelText: tr(context, en: 'View Name', zh: '视图名称'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr(context, en: 'Cancel', zh: '取消')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Text(tr(context, en: 'Save', zh: '保存')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || name == null || name.isEmpty) return;
+
+    final next = List<_SavedFilterView>.from(_savedViews);
+    next.removeWhere((e) => e.name == name);
+    next.insert(0, _SavedFilterView(name: name, filter: _state));
+    if (next.length > 12) {
+      next.removeRange(12, next.length);
+    }
+    setState(() => _savedViews = next);
+    await _saveSavedViews();
+  }
+
+  Future<void> _pickSavedView() async {
+    if (_savedViews.isEmpty) return;
+    final picked = await showModalBottomSheet<_SavedFilterView>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return SafeArea(
+          child: ListView.separated(
+            itemCount: _savedViews.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final v = _savedViews[i];
+              return ListTile(
+                title: Text(v.name),
+                subtitle: Text(
+                  _savedViewSummary(v.filter),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  tooltip: tr(context, en: 'Delete', zh: '删除'),
+                  onPressed: () async {
+                    final next = List<_SavedFilterView>.from(_savedViews)
+                      ..removeAt(i);
+                    if (!mounted) return;
+                    setState(() => _savedViews = next);
+                    await _saveSavedViews();
+                    if (!mounted) return;
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+                onTap: () => Navigator.of(context).pop(v),
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    _keywordCtrl.text = picked.filter.keyword;
+    _emit(picked.filter);
+  }
+
+  String _savedViewSummary(LedgerFilterState f) {
+    final parts = <String>[];
+    if (f.keyword.trim().isNotEmpty) {
+      parts.add('kw:${f.keyword.trim()}');
+    }
+    if (f.range != null) {
+      parts.add(_fmtRangeLabel(context, f.range));
+    }
+    if (f.categoryId != null) {
+      parts.add(tr(context, en: 'Category set', zh: '已选分类'));
+    }
+    return parts.join(' | ');
   }
 
   String _fmtRangeLabel(BuildContext context, DateTimeRange? r) {
@@ -431,8 +560,90 @@ class _LedgerSearchPanelState extends State<LedgerSearchPanel> {
                 );
               },
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _smallAction(
+                    icon: Icons.bookmark_add_outlined,
+                    label: tr(context, en: 'Save View', zh: '保存视图'),
+                    onPressed: _state.hasAny ? _saveCurrentView : null,
+                  ),
+                  _smallAction(
+                    icon: Icons.collections_bookmark_outlined,
+                    label: tr(context, en: 'Views', zh: '视图'),
+                    onPressed: _savedViews.isEmpty ? null : _pickSavedView,
+                  ),
+                  if (widget.onExportPressed != null)
+                    _smallAction(
+                      icon: Icons.file_download_outlined,
+                      label: tr(context, en: 'Export', zh: '导出'),
+                      onPressed: widget.onExportPressed,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _smallAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+    );
+  }
+}
+
+class _SavedFilterView {
+  final String name;
+  final LedgerFilterState filter;
+
+  const _SavedFilterView({required this.name, required this.filter});
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'name': name,
+    'keyword': filter.keyword,
+    'range_start': filter.range?.start.toUtc().toIso8601String(),
+    'range_end': filter.range?.end.toUtc().toIso8601String(),
+    'category_id': filter.categoryId,
+  };
+
+  static _SavedFilterView fromJson(Map<String, dynamic> json) {
+    final start = json['range_start']?.toString();
+    final end = json['range_end']?.toString();
+    DateTimeRange? range;
+    if (start != null && end != null) {
+      final s = DateTime.tryParse(start);
+      final e = DateTime.tryParse(end);
+      if (s != null && e != null) {
+        range = DateTimeRange(start: s.toLocal(), end: e.toLocal());
+      }
+    }
+    return _SavedFilterView(
+      name: (json['name'] ?? '').toString(),
+      filter: LedgerFilterState(
+        keyword: (json['keyword'] ?? '').toString(),
+        range: range,
+        categoryId: (json['category_id'] as num?)?.toInt(),
       ),
     );
   }

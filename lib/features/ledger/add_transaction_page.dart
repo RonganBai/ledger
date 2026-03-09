@@ -40,12 +40,15 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _amountController = TextEditingController();
   final _contentController = TextEditingController();
   final _newCatController = TextEditingController();
+  final List<_QuickTemplate> _quickTemplates = <_QuickTemplate>[];
   late final HomeTutorialController _addTutorialController;
 
   bool _isIncome = false;
   int? _categoryId;
   bool _catExpanded = false;
   bool _catManageMode = false;
+  int? _suggestedCategoryId;
+  Timer? _suggestDebounce;
   late DateTime _occurredAt;
   Timer? _tutorialRectSyncTimer;
   final GlobalKey _tutorialDateKey = GlobalKey(debugLabel: 'add_tutorial_date');
@@ -96,6 +99,9 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     } else {
       _occurredAt = DateTime.now();
     }
+    _contentController.addListener(_scheduleSuggest);
+    unawaited(_loadQuickTemplates());
+    _scheduleSuggest();
 
     if (_isTutorialMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -111,6 +117,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     _amountController.dispose();
     _contentController.dispose();
     _newCatController.dispose();
+    _suggestDebounce?.cancel();
     super.dispose();
   }
 
@@ -506,6 +513,98 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     });
   }
 
+  Future<void> _loadQuickTemplates() async {
+    final accountId = widget.accountId ?? 1;
+    final direction = _isIncome ? 'income' : 'expense';
+    final rows =
+        await (db.select(db.transactions)
+              ..where(
+                (t) =>
+                    t.accountId.equals(accountId) &
+                    t.direction.equals(direction),
+              )
+              ..orderBy([
+                (t) => d.OrderingTerm(
+                  expression: t.updatedAt,
+                  mode: d.OrderingMode.desc,
+                ),
+              ])
+              ..limit(80))
+            .get();
+    final seen = <String>{};
+    final list = <_QuickTemplate>[];
+    for (final tx in rows) {
+      final merchant = (tx.merchant ?? '').trim();
+      final key = '${tx.categoryId}|$merchant';
+      if (seen.contains(key)) continue;
+      seen.add(key);
+      list.add(_QuickTemplate(categoryId: tx.categoryId, merchant: merchant));
+      if (list.length >= 6) break;
+    }
+    if (!mounted) return;
+    setState(() {
+      _quickTemplates
+        ..clear()
+        ..addAll(list);
+    });
+  }
+
+  void _scheduleSuggest() {
+    _suggestDebounce?.cancel();
+    _suggestDebounce = Timer(const Duration(milliseconds: 260), () {
+      unawaited(_applySmartSuggestion());
+    });
+  }
+
+  Future<void> _applySmartSuggestion() async {
+    final keyword = _contentController.text.trim();
+    if (keyword.length < 2) {
+      if (mounted) setState(() => _suggestedCategoryId = null);
+      return;
+    }
+    final accountId = widget.accountId ?? 1;
+    final direction = _isIncome ? 'income' : 'expense';
+    final rows =
+        await (db.select(db.transactions)
+              ..where(
+                (t) =>
+                    t.accountId.equals(accountId) &
+                    t.direction.equals(direction) &
+                    (t.merchant.like('%$keyword%') | t.memo.like('%$keyword%')),
+              )
+              ..orderBy([
+                (t) => d.OrderingTerm(
+                  expression: t.updatedAt,
+                  mode: d.OrderingMode.desc,
+                ),
+              ])
+              ..limit(120))
+            .get();
+    if (!mounted) return;
+    final score = <int, int>{};
+    for (final tx in rows) {
+      final cid = tx.categoryId;
+      if (cid == null) continue;
+      score[cid] = (score[cid] ?? 0) + 1;
+    }
+    if (score.isEmpty) {
+      setState(() => _suggestedCategoryId = null);
+      return;
+    }
+    final sorted = score.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    setState(() => _suggestedCategoryId = sorted.first.key);
+  }
+
+  Future<void> _applyTemplate(_QuickTemplate t) async {
+    setState(() {
+      if (t.merchant.isNotEmpty) {
+        _contentController.text = t.merchant;
+      }
+      _categoryId = t.categoryId;
+    });
+  }
+
   Future<void> _save() async {
     final amount = double.tryParse(_amountController.text.trim());
     if (amount == null) return;
@@ -513,7 +612,8 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     final content = _contentController.text.trim();
     final isIncome = _isIncome;
     final cents = (amount * 100).round();
-    final catName = await _categoryNameById(_categoryId);
+    final effectiveCategoryId = _categoryId ?? _suggestedCategoryId;
+    final catName = await _categoryNameById(effectiveCategoryId);
     final autoMemo = content.isEmpty
         ? ((catName?.trim().isNotEmpty ?? false) ? catName!.trim() : null)
         : null;
@@ -529,7 +629,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
           direction: d.Value(isIncome ? 'income' : 'expense'),
           amountCents: d.Value(cents),
           occurredAt: d.Value(_occurredAt),
-          categoryId: d.Value(_categoryId),
+          categoryId: d.Value(effectiveCategoryId),
           merchant: d.Value(content.isEmpty ? null : content),
           memo: content.isEmpty ? d.Value(autoMemo) : const d.Value.absent(),
           updatedAt: d.Value(DateTime.now()),
@@ -550,7 +650,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               currency: d.Value(
                 (widget.accountCurrency ?? 'USD').toUpperCase(),
               ),
-              categoryId: d.Value(_categoryId),
+              categoryId: d.Value(effectiveCategoryId),
               merchant: d.Value(content.isEmpty ? null : content),
               memo: d.Value(autoMemo),
             ),
@@ -589,40 +689,40 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     if (!isZh) return raw;
 
     const zhFallback = <String, String>{
-      'Food': '餐饮',
-      'Dining': '餐饮',
-      'Groceries': '杂货',
-      'Shopping': '购物',
+      'Food': '椁愰ギ',
+      'Dining': '椁愰ギ',
+      'Groceries': '鏉傝揣',
+      'Shopping': '璐墿',
       'Transport': '交通',
       'Transportation': '交通',
-      'Gas': '加油',
-      'Fuel': '加油',
-      'Rent': '房租',
-      'Utilities': '水电燃气',
-      'Electricity': '电费',
-      'Water': '水费',
-      'Internet': '网络',
-      'Phone': '话费',
-      'Entertainment': '娱乐',
-      'Healthcare': '医疗',
-      'Medical': '医疗',
-      'Pharmacy': '药品',
-      'Insurance': '保险',
-      'Travel': '旅行',
-      'Education': '教育',
-      'Pets': '宠物',
-      'Gift': '礼物',
-      'Gifts': '礼物',
-      'Other': '其他',
-      'Salary': '工资',
-      'Wages': '工资',
-      'Bonus': '奖金',
-      'Interest': '利息',
-      'Investment': '投资',
-      'Investments': '投资',
+      'Gas': '鍔犳补',
+      'Fuel': '鍔犳补',
+      'Rent': '鎴跨',
+      'Utilities': '姘寸數鐕冩皵',
+      'Electricity': '鐢佃垂',
+      'Water': '姘磋垂',
+      'Internet': '缃戠粶',
+      'Phone': '璇濊垂',
+      'Entertainment': '濞变箰',
+      'Healthcare': '鍖荤枟',
+      'Medical': '鍖荤枟',
+      'Pharmacy': '鑽搧',
+      'Insurance': '淇濋櫓',
+      'Travel': '鏃呰',
+      'Education': '鏁欒偛',
+      'Pets': '瀹犵墿',
+      'Gift': '绀肩墿',
+      'Gifts': '绀肩墿',
+      'Other': '鍏朵粬',
+      'Salary': '宸ヨ祫',
+      'Wages': '宸ヨ祫',
+      'Bonus': '濂栭噾',
+      'Interest': '鍒╂伅',
+      'Investment': '鎶曡祫',
+      'Investments': '鎶曡祫',
       'Refund': '退款',
-      'Reimbursement': '报销',
-      'Transfer': '转账',
+      'Reimbursement': '鎶ラ攢',
+      'Transfer': '杞处',
     };
 
     return zhFallback[raw.trim()] ?? raw;
@@ -740,11 +840,45 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 ),
               ],
               selected: {_isIncome},
-              onSelectionChanged: (s) => setState(() {
-                _isIncome = s.first;
-                _categoryId = null;
-              }),
+              onSelectionChanged: (s) {
+                setState(() {
+                  _isIncome = s.first;
+                  _categoryId = null;
+                  _suggestedCategoryId = null;
+                });
+                unawaited(_loadQuickTemplates());
+                _scheduleSuggest();
+              },
             ),
+          ),
+          Builder(
+            builder: (context) {
+              if (_quickTemplates.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final t in _quickTemplates)
+                      ActionChip(
+                        avatar: const Icon(Icons.flash_on_rounded, size: 16),
+                        label: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 150),
+                          child: Text(
+                            t.merchant.isEmpty
+                                ? at(context, 'Quick Template')
+                                : t.merchant,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        onPressed: () => _applyTemplate(t),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
           const SizedBox(height: 16),
           KeyedSubtree(
@@ -781,6 +915,48 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (_suggestedCategoryId != null &&
+                        _suggestedCategoryId != _categoryId) ...[
+                      Builder(
+                        builder: (_) {
+                          final hit = cats
+                              .where((c) => c.id == _suggestedCategoryId)
+                              .toList();
+                          if (hit.isEmpty) return const SizedBox.shrink();
+                          final suggestedName = _categoryDisplayName(
+                            context,
+                            hit.first.name,
+                          );
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Card(
+                              child: ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.auto_awesome_rounded),
+                                title: Text(
+                                  at(
+                                    context,
+                                    'Suggested category: $suggestedName',
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  at(
+                                    context,
+                                    'Based on your history for similar content',
+                                  ),
+                                ),
+                                trailing: TextButton(
+                                  onPressed: () {
+                                    setState(() => _categoryId = hit.first.id);
+                                  },
+                                  child: Text(at(context, 'Use')),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                     InkWell(
                       onTap: _toggleCategoryExpanded,
                       borderRadius: BorderRadius.circular(12),
@@ -1019,4 +1195,11 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     if (!_isTutorialMode) return page;
     return Stack(children: [page, _buildAddTutorialOverlay(context)]);
   }
+}
+
+class _QuickTemplate {
+  final int? categoryId;
+  final String merchant;
+
+  const _QuickTemplate({required this.categoryId, required this.merchant});
 }

@@ -6,8 +6,8 @@ import 'ledger_side_menu_texts.dart';
 class LedgerSideMenu extends StatelessWidget {
   final WidgetBuilder statsPageBuilder;
   final VoidCallback? onOpenStats;
+  final VoidCallback onOpenAccountManagement;
   final VoidCallback onSwitchAccount;
-  final VoidCallback onManageAccounts;
   final VoidCallback onOpenHistory;
   final VoidCallback onOpenAnalysis;
   final VoidCallback onOpenRecurring;
@@ -23,8 +23,8 @@ class LedgerSideMenu extends StatelessWidget {
     super.key,
     required this.statsPageBuilder,
     this.onOpenStats,
+    required this.onOpenAccountManagement,
     required this.onSwitchAccount,
-    required this.onManageAccounts,
     required this.onOpenHistory,
     required this.onOpenAnalysis,
     required this.onOpenRecurring,
@@ -139,9 +139,7 @@ class LedgerSideMenu extends StatelessWidget {
                           builder: (context, version, _) => Text(
                             'Current Version: $version',
                             style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                ),
+                                ?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ),
                       ),
@@ -149,14 +147,14 @@ class LedgerSideMenu extends StatelessWidget {
                       card(
                         children: [
                           tile(
+                            icon: Icons.person_outline_rounded,
+                            title: lsmt(context, 'Account Management'),
+                            onTap: onOpenAccountManagement,
+                          ),
+                          tile(
                             icon: Icons.swap_horiz_rounded,
                             title: lsmt(context, 'Switch Account'),
                             onTap: onSwitchAccount,
-                          ),
-                          tile(
-                            icon: Icons.account_balance_wallet_rounded,
-                            title: lsmt(context, 'Manage Accounts'),
-                            onTap: onManageAccounts,
                           ),
                         ],
                       ),

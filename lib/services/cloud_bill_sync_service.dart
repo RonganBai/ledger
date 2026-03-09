@@ -4,13 +4,34 @@ import 'package:uuid/uuid.dart';
 
 import '../data/db/app_database.dart';
 import 'app_log.dart';
+import 'sync_conflict_log_service.dart';
 
 class CloudBillSyncService {
   final AppDatabase db;
   final SupabaseClient client;
   final Uuid _uuid = const Uuid();
+  final SyncConflictLogService _conflictLog = SyncConflictLogService();
 
   CloudBillSyncService({required this.db, required this.client});
+
+  Future<void> _recordConflict({
+    required String direction,
+    required String reason,
+    required String localTxId,
+    required String cloudTxId,
+    required String detail,
+  }) async {
+    await _conflictLog.append(
+      SyncConflictEvent(
+        time: DateTime.now(),
+        direction: direction,
+        reason: reason,
+        localTxId: localTxId,
+        cloudTxId: cloudTxId,
+        detail: detail,
+      ),
+    );
+  }
 
   Future<int> clearAllCloudBillsForCurrentUser() async {
     final user = client.auth.currentUser;
@@ -170,6 +191,14 @@ class CloudBillSyncService {
               accountMap[localTx.accountId],
             );
             updatedCloud++;
+            await _recordConflict(
+              direction: 'local_to_cloud',
+              reason: 'sync/$reason/by_id/newer_local',
+              localTxId: localTx.id,
+              cloudTxId: cloudBySameId.id,
+              detail:
+                  'Local updatedAt ${localTx.updatedAt.toIso8601String()} newer than cloud ${cloudBySameId.updatedAt.toIso8601String()}',
+            );
           }
           continue;
         }
@@ -194,6 +223,14 @@ class CloudBillSyncService {
             accountMap[localTx.accountId],
           );
           updatedCloud++;
+          await _recordConflict(
+            direction: 'local_to_cloud',
+            reason: 'sync/$reason/by_key/newer_local',
+            localTxId: localTx.id,
+            cloudTxId: cloudTx.id,
+            detail:
+                'Local updatedAt ${localTx.updatedAt.toIso8601String()} newer than cloud ${cloudTx.updatedAt.toIso8601String()}',
+          );
         }
       }
 
@@ -208,6 +245,16 @@ class CloudBillSyncService {
           if (shouldUpdateByTime || shouldUpdateByDiff) {
             await _updateLocalFromCloud(localBySameId, cloudTx);
             updatedLocal++;
+            await _recordConflict(
+              direction: 'cloud_to_local',
+              reason: shouldUpdateByTime
+                  ? 'sync/$reason/by_id/newer_cloud'
+                  : 'sync/$reason/by_id/content_diff',
+              localTxId: localBySameId.id,
+              cloudTxId: cloudTx.id,
+              detail:
+                  'Cloud updatedAt ${cloudTx.updatedAt.toIso8601String()}, local updatedAt ${localBySameId.updatedAt.toIso8601String()}',
+            );
           }
           continue;
         }
@@ -242,6 +289,14 @@ class CloudBillSyncService {
         )) {
           await _updateLocalFromCloud(localTx, cloudTx);
           updatedLocal++;
+          await _recordConflict(
+            direction: 'cloud_to_local',
+            reason: 'sync/$reason/newer_cloud',
+            localTxId: localTx.id,
+            cloudTxId: cloudTx.id,
+            detail:
+                'Cloud updatedAt ${cloudTx.updatedAt.toIso8601String()} newer than local ${localTx.updatedAt.toIso8601String()}',
+          );
           if (localByExactKey == null &&
               localByNoDirection == null &&
               localBySourceId != null) {
@@ -305,6 +360,16 @@ class CloudBillSyncService {
           if (shouldUpdateByTime || shouldUpdateByDiff) {
             await _updateLocalFromCloud(localBySameId, cloudTx);
             updatedLocal++;
+            await _recordConflict(
+              direction: 'cloud_to_local',
+              reason: shouldUpdateByTime
+                  ? 'download/$reason/by_id/newer_cloud'
+                  : 'download/$reason/by_id/content_diff',
+              localTxId: localBySameId.id,
+              cloudTxId: cloudTx.id,
+              detail:
+                  'Cloud updatedAt ${cloudTx.updatedAt.toIso8601String()}, local updatedAt ${localBySameId.updatedAt.toIso8601String()}',
+            );
             if (shouldUpdateByDiff && !shouldUpdateByTime) {
               AppLog.i(
                 'CloudSync',
@@ -360,6 +425,16 @@ class CloudBillSyncService {
         if (shouldUpdateByTime || shouldUpdateByDiff) {
           await _updateLocalFromCloud(localTx, cloudTx);
           updatedLocal++;
+          await _recordConflict(
+            direction: 'cloud_to_local',
+            reason: shouldUpdateByTime
+                ? 'download/$reason/newer_cloud'
+                : 'download/$reason/content_diff',
+            localTxId: localTx.id,
+            cloudTxId: cloudTx.id,
+            detail:
+                'Cloud updatedAt ${cloudTx.updatedAt.toIso8601String()}, local updatedAt ${localTx.updatedAt.toIso8601String()}',
+          );
           if (localByExactKey == null && localByNoDirection != null) {
             AppLog.i(
               'CloudSync',
@@ -649,6 +724,14 @@ class CloudBillSyncService {
           'CloudSync',
           'Single upload updated cloud($reason) tx=${localTx.id}',
         );
+        await _recordConflict(
+          direction: 'local_to_cloud',
+          reason: 'single_upload/$reason/newer_local',
+          localTxId: localTx.id,
+          cloudTxId: matchedCloud.id,
+          detail:
+              'Local updatedAt ${localTx.updatedAt.toIso8601String()} newer than cloud ${matchedCloud.updatedAt.toIso8601String()}',
+        );
         return;
       }
 
@@ -659,6 +742,14 @@ class CloudBillSyncService {
         AppLog.i(
           'CloudSync',
           'Single upload conflict: updated local from cloud($reason) tx=${localTx.id}',
+        );
+        await _recordConflict(
+          direction: 'cloud_to_local',
+          reason: 'single_upload/$reason/newer_cloud',
+          localTxId: localTx.id,
+          cloudTxId: matchedCloud.id,
+          detail:
+              'Cloud updatedAt ${matchedCloud.updatedAt.toIso8601String()} newer than local ${localTx.updatedAt.toIso8601String()}',
         );
         return;
       }

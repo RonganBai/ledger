@@ -5,6 +5,7 @@ import 'app/app.dart';
 import 'app/app_version.dart';
 import 'data/db/app_database.dart';
 import 'features/reports/report_service.dart';
+import 'features/settings/auto_backup_service.dart';
 import 'services/app_log.dart';
 import 'services/background_runtime_service.dart';
 
@@ -28,6 +29,11 @@ Future<void> main() async {
 
   final db = AppDatabase();
   AppLog.i('Database', 'Local DB initialized');
+  try {
+    await AutoBackupService.I.runDailyBackupIfNeeded(db, retentionDays: 14);
+  } catch (e, st) {
+    AppLog.e('AutoBackup', e, st);
+  }
   try {
     await BackgroundRuntimeService.initializeAndStart(startNow: false);
     AppLog.i('BackgroundService', 'Background runtime initialized');
@@ -53,7 +59,10 @@ Future<void> main() async {
 
       try {
         final res = await client.from('accounts').select('id').limit(1);
-        AppLog.i('Supabase', 'accounts table probe success: rows=${res.length}');
+        AppLog.i(
+          'Supabase',
+          'accounts table probe success: rows=${res.length}',
+        );
       } catch (e, st) {
         AppLog.w(
           'Supabase',

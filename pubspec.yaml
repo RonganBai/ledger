@@ -52,6 +52,7 @@ dependencies:
   syncfusion_flutter_pdf: any
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^17.2.3
+  cryptography: ^2.7.0
 
 
 dev_dependencies:
