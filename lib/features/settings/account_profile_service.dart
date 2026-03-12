@@ -61,6 +61,7 @@ class AccountProfileService {
   static const int _encryptionVersion = 1;
   static const String _primaryTable = 'ledger_user_profiles';
   static const String _legacyTable = 'ledger_account_profiles';
+  static const String _publicProfileTable = 'ledger_user_public_profiles';
   static const String _kAad = 'ledger_profile_v1';
   static const String _kHkdfSalt = 'ledger_app_profile_salt_v1';
   static const String _kHkdfInfo = 'ledger_profile_payload';
@@ -101,6 +102,11 @@ class AccountProfileService {
       'user_id': user.id,
       'ciphertext': encrypted,
       'encryption_version': _encryptionVersion,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    await _client.from(_publicProfileTable).upsert(<String, dynamic>{
+      'user_id': user.id,
+      'display_name': profile.displayName.trim(),
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     });
   }

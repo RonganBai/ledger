@@ -18,6 +18,7 @@ const Map<String, String> _kSideMenuZh = <String, String>{
   'Replay Tutorial': '\u91cd\u65b0\u64ad\u653e\u65b0\u624b\u6559\u7a0b',
   'Settings': '\u8bbe\u7f6e',
   'Theme': '\u4e3b\u9898',
+  'Back to Admin': '\u8fd4\u56de\u7ba1\u7406\u5458\u5165\u53e3',
   'Sign Out': '\u767b\u51fa',
 };
 

@@ -16,6 +16,7 @@ import '../auth/auth_redirect.dart';
 import 'settings_texts.dart';
 import '../../services/cloud_bill_sync_service.dart';
 import '../../ui/pet/pet_config.dart';
+import 'feedback_page.dart';
 import 'import_export_service.dart';
 import 'sync_conflict_log_page.dart';
 
@@ -268,7 +269,19 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final isZh = Localizations.localeOf(context).languageCode == 'zh';
     return Scaffold(
-      appBar: AppBar(title: Text(st(context, 'Settings'))),
+      appBar: AppBar(
+        title: Text(st(context, 'Settings')),
+        actions: [
+          if (!widget.isGuestMode)
+            IconButton(
+              tooltip: isZh ? '用户反馈' : 'User Feedback',
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const FeedbackPage())),
+              icon: const Icon(Icons.feedback_rounded),
+            ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -995,6 +1008,7 @@ class _ImportExportPageState extends State<_ImportExportPage> {
     final accounts =
         await (widget.db.select(widget.db.accounts)
               ..where((a) => a.isActive.equals(true))
+              ..where((a) => a.ownerUserId.equals(widget.db.currentOwnerUserId))
               ..orderBy([(a) => OrderingTerm(expression: a.sortOrder)]))
             .get();
     if (!mounted) return;

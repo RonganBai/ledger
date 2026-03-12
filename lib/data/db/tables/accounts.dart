@@ -3,6 +3,9 @@ import 'package:drift/drift.dart';
 class Accounts extends Table {
   IntColumn get id => integer().autoIncrement()();
 
+  TextColumn get ownerUserId =>
+      text().withDefault(const Constant('__guest__'))();
+
   // Cloud account binding (Supabase ledger_accounts.id)
   TextColumn get cloudAccountId => text().nullable()();
 
@@ -21,11 +24,10 @@ class Accounts extends Table {
 
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
 
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {cloudAccountId},
-      ];
+    {cloudAccountId},
+  ];
 }

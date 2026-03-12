@@ -33,6 +33,7 @@ class AccountManagePage extends StatelessWidget {
           .insert(
             AccountsCompanion.insert(
               name: result.name,
+              ownerUserId: d.Value(db.currentOwnerUserId),
               type: d.Value(result.type),
               currency: d.Value(result.currency),
             ),
@@ -80,7 +81,10 @@ class AccountManagePage extends StatelessWidget {
     final activeCount =
         await (db.selectOnly(db.accounts)
               ..addColumns([db.accounts.id.count()])
-              ..where(db.accounts.isActive.equals(true)))
+              ..where(
+                db.accounts.isActive.equals(true) &
+                    db.accounts.ownerUserId.equals(db.currentOwnerUserId),
+              ))
             .getSingle();
     final count = activeCount.read(db.accounts.id.count()) ?? 0;
     if (count <= 1) {
@@ -158,7 +162,11 @@ class AccountManagePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final stream =
         (db.select(db.accounts)
-              ..where((a) => a.isActive.equals(true))
+              ..where(
+                (a) =>
+                    a.isActive.equals(true) &
+                    a.ownerUserId.equals(db.currentOwnerUserId),
+              )
               ..orderBy([
                 (a) => d.OrderingTerm(expression: a.sortOrder),
                 (a) => d.OrderingTerm(expression: a.id),

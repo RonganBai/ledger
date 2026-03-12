@@ -21,6 +21,18 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _ownerUserIdMeta = const VerificationMeta(
+    'ownerUserId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerUserId = GeneratedColumn<String>(
+    'owner_user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('__guest__'),
+  );
   static const VerificationMeta _cloudAccountIdMeta = const VerificationMeta(
     'cloudAccountId',
   );
@@ -117,6 +129,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    ownerUserId,
     cloudAccountId,
     name,
     type,
@@ -139,6 +152,15 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('owner_user_id')) {
+      context.handle(
+        _ownerUserIdMeta,
+        ownerUserId.isAcceptableOrUnknown(
+          data['owner_user_id']!,
+          _ownerUserIdMeta,
+        ),
+      );
     }
     if (data.containsKey('cloud_account_id')) {
       context.handle(
@@ -204,6 +226,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      ownerUserId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_user_id'],
+      )!,
       cloudAccountId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}cloud_account_id'],
@@ -243,6 +269,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
 
 class Account extends DataClass implements Insertable<Account> {
   final int id;
+  final String ownerUserId;
   final String? cloudAccountId;
   final String name;
   final String type;
@@ -252,6 +279,7 @@ class Account extends DataClass implements Insertable<Account> {
   final DateTime createdAt;
   const Account({
     required this.id,
+    required this.ownerUserId,
     this.cloudAccountId,
     required this.name,
     required this.type,
@@ -264,6 +292,7 @@ class Account extends DataClass implements Insertable<Account> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['owner_user_id'] = Variable<String>(ownerUserId);
     if (!nullToAbsent || cloudAccountId != null) {
       map['cloud_account_id'] = Variable<String>(cloudAccountId);
     }
@@ -279,6 +308,7 @@ class Account extends DataClass implements Insertable<Account> {
   AccountsCompanion toCompanion(bool nullToAbsent) {
     return AccountsCompanion(
       id: Value(id),
+      ownerUserId: Value(ownerUserId),
       cloudAccountId: cloudAccountId == null && nullToAbsent
           ? const Value.absent()
           : Value(cloudAccountId),
@@ -298,6 +328,7 @@ class Account extends DataClass implements Insertable<Account> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Account(
       id: serializer.fromJson<int>(json['id']),
+      ownerUserId: serializer.fromJson<String>(json['ownerUserId']),
       cloudAccountId: serializer.fromJson<String?>(json['cloudAccountId']),
       name: serializer.fromJson<String>(json['name']),
       type: serializer.fromJson<String>(json['type']),
@@ -312,6 +343,7 @@ class Account extends DataClass implements Insertable<Account> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'ownerUserId': serializer.toJson<String>(ownerUserId),
       'cloudAccountId': serializer.toJson<String?>(cloudAccountId),
       'name': serializer.toJson<String>(name),
       'type': serializer.toJson<String>(type),
@@ -324,6 +356,7 @@ class Account extends DataClass implements Insertable<Account> {
 
   Account copyWith({
     int? id,
+    String? ownerUserId,
     Value<String?> cloudAccountId = const Value.absent(),
     String? name,
     String? type,
@@ -333,6 +366,7 @@ class Account extends DataClass implements Insertable<Account> {
     DateTime? createdAt,
   }) => Account(
     id: id ?? this.id,
+    ownerUserId: ownerUserId ?? this.ownerUserId,
     cloudAccountId: cloudAccountId.present
         ? cloudAccountId.value
         : this.cloudAccountId,
@@ -346,6 +380,9 @@ class Account extends DataClass implements Insertable<Account> {
   Account copyWithCompanion(AccountsCompanion data) {
     return Account(
       id: data.id.present ? data.id.value : this.id,
+      ownerUserId: data.ownerUserId.present
+          ? data.ownerUserId.value
+          : this.ownerUserId,
       cloudAccountId: data.cloudAccountId.present
           ? data.cloudAccountId.value
           : this.cloudAccountId,
@@ -362,6 +399,7 @@ class Account extends DataClass implements Insertable<Account> {
   String toString() {
     return (StringBuffer('Account(')
           ..write('id: $id, ')
+          ..write('ownerUserId: $ownerUserId, ')
           ..write('cloudAccountId: $cloudAccountId, ')
           ..write('name: $name, ')
           ..write('type: $type, ')
@@ -376,6 +414,7 @@ class Account extends DataClass implements Insertable<Account> {
   @override
   int get hashCode => Object.hash(
     id,
+    ownerUserId,
     cloudAccountId,
     name,
     type,
@@ -389,6 +428,7 @@ class Account extends DataClass implements Insertable<Account> {
       identical(this, other) ||
       (other is Account &&
           other.id == this.id &&
+          other.ownerUserId == this.ownerUserId &&
           other.cloudAccountId == this.cloudAccountId &&
           other.name == this.name &&
           other.type == this.type &&
@@ -400,6 +440,7 @@ class Account extends DataClass implements Insertable<Account> {
 
 class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<int> id;
+  final Value<String> ownerUserId;
   final Value<String?> cloudAccountId;
   final Value<String> name;
   final Value<String> type;
@@ -409,6 +450,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<DateTime> createdAt;
   const AccountsCompanion({
     this.id = const Value.absent(),
+    this.ownerUserId = const Value.absent(),
     this.cloudAccountId = const Value.absent(),
     this.name = const Value.absent(),
     this.type = const Value.absent(),
@@ -419,6 +461,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   });
   AccountsCompanion.insert({
     this.id = const Value.absent(),
+    this.ownerUserId = const Value.absent(),
     this.cloudAccountId = const Value.absent(),
     required String name,
     this.type = const Value.absent(),
@@ -429,6 +472,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) : name = Value(name);
   static Insertable<Account> custom({
     Expression<int>? id,
+    Expression<String>? ownerUserId,
     Expression<String>? cloudAccountId,
     Expression<String>? name,
     Expression<String>? type,
@@ -439,6 +483,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (ownerUserId != null) 'owner_user_id': ownerUserId,
       if (cloudAccountId != null) 'cloud_account_id': cloudAccountId,
       if (name != null) 'name': name,
       if (type != null) 'type': type,
@@ -451,6 +496,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
 
   AccountsCompanion copyWith({
     Value<int>? id,
+    Value<String>? ownerUserId,
     Value<String?>? cloudAccountId,
     Value<String>? name,
     Value<String>? type,
@@ -461,6 +507,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   }) {
     return AccountsCompanion(
       id: id ?? this.id,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
       cloudAccountId: cloudAccountId ?? this.cloudAccountId,
       name: name ?? this.name,
       type: type ?? this.type,
@@ -476,6 +523,9 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (ownerUserId.present) {
+      map['owner_user_id'] = Variable<String>(ownerUserId.value);
     }
     if (cloudAccountId.present) {
       map['cloud_account_id'] = Variable<String>(cloudAccountId.value);
@@ -505,6 +555,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   String toString() {
     return (StringBuffer('AccountsCompanion(')
           ..write('id: $id, ')
+          ..write('ownerUserId: $ownerUserId, ')
           ..write('cloudAccountId: $cloudAccountId, ')
           ..write('name: $name, ')
           ..write('type: $type, ')
@@ -3102,6 +3153,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$AccountsTableCreateCompanionBuilder =
     AccountsCompanion Function({
       Value<int> id,
+      Value<String> ownerUserId,
       Value<String?> cloudAccountId,
       required String name,
       Value<String> type,
@@ -3113,6 +3165,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
 typedef $$AccountsTableUpdateCompanionBuilder =
     AccountsCompanion Function({
       Value<int> id,
+      Value<String> ownerUserId,
       Value<String?> cloudAccountId,
       Value<String> name,
       Value<String> type,
@@ -3184,6 +3237,11 @@ class $$AccountsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3288,6 +3346,11 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get cloudAccountId => $composableBuilder(
     column: $table.cloudAccountId,
     builder: (column) => ColumnOrderings(column),
@@ -3335,6 +3398,11 @@ class $$AccountsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerUserId => $composableBuilder(
+    column: $table.ownerUserId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get cloudAccountId => $composableBuilder(
     column: $table.cloudAccountId,
@@ -3443,6 +3511,7 @@ class $$AccountsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String> ownerUserId = const Value.absent(),
                 Value<String?> cloudAccountId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> type = const Value.absent(),
@@ -3452,6 +3521,7 @@ class $$AccountsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
+                ownerUserId: ownerUserId,
                 cloudAccountId: cloudAccountId,
                 name: name,
                 type: type,
@@ -3463,6 +3533,7 @@ class $$AccountsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String> ownerUserId = const Value.absent(),
                 Value<String?> cloudAccountId = const Value.absent(),
                 required String name,
                 Value<String> type = const Value.absent(),
@@ -3472,6 +3543,7 @@ class $$AccountsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
+                ownerUserId: ownerUserId,
                 cloudAccountId: cloudAccountId,
                 name: name,
                 type: type,

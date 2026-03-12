@@ -11,8 +11,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/db/app_database.dart';
 import '../features/auth/auth_local_prefs.dart';
 import '../features/auth/login_page.dart';
-import '../features/ledger/ledger_home.dart';
+import '../features/admin/admin_entry_page.dart';
 import '../services/app_log.dart';
+import '../services/user_access_service.dart';
 import '../services/cloud_bill_sync_service.dart';
 import '../ui/pet/pet_config.dart';
 import '../ui/pet/pet_overlay.dart';
@@ -43,6 +44,8 @@ class _MyAppState extends State<MyApp> {
   StreamSubscription<AuthState>? _authSub;
   bool _syncingAfterLogin = false;
   bool _isGuestMode = false;
+  String? _blockedNoticeMessage;
+  final UserAccessService _accessService = UserAccessService();
 
   @override
   void initState() {
@@ -62,10 +65,16 @@ class _MyAppState extends State<MyApp> {
       if (event.session != null) {
         setState(() => _isGuestMode = false);
       }
+      if (event.session == null) {
+        final blockedNotice = UserAccessService.consumePendingBlockedNotice();
+        if (blockedNotice != null) {
+          _queueBlockedNoticeMessage(blockedNotice);
+        }
+      }
       if (event.session != null &&
           (event.event == AuthChangeEvent.signedIn ||
               event.event == AuthChangeEvent.initialSession)) {
-        unawaited(_syncAfterLogin());
+        unawaited(_enforceAccessAndSync());
       }
     });
     _loadThemePrefs();
@@ -84,6 +93,16 @@ class _MyAppState extends State<MyApp> {
         await auth.signOut();
         session = null;
         AppLog.i('Auth', 'Auto login policy denied persisted session');
+      }
+      if (session != null) {
+        try {
+          await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
+          session = auth.currentSession;
+        } on UserAccessBlockedException catch (e) {
+          AppLog.w('Auth', 'Blocked disabled user session during init. ${e.message}');
+          _queueBlockedNoticeMessage(e.message);
+          session = null;
+        }
       }
     }
     if (!mounted) return;
@@ -109,6 +128,37 @@ class _MyAppState extends State<MyApp> {
     } finally {
       _syncingAfterLogin = false;
     }
+  }
+
+  Future<void> _enforceAccessAndSync() async {
+    try {
+      await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
+    } on UserAccessBlockedException catch (e) {
+      AppLog.w('Auth', 'Blocked disabled user session after auth change. ${e.message}');
+      _queueBlockedNoticeMessage(e.message);
+      return;
+    }
+    await _syncAfterLogin();
+  }
+
+  void _queueBlockedNoticeMessage(String rawMessage) {
+    final languageCode = _locale.languageCode;
+    final hasReason = rawMessage.contains('Reason:');
+    final reason = hasReason ? rawMessage.split('Reason:').last.trim() : null;
+    final message = languageCode == 'zh'
+        ? (reason == null || reason.isEmpty
+              ? '该账户已被封禁，当前无法登录。'
+              : '该账户已被封禁，当前无法登录。\n原因：$reason')
+        : (reason == null || reason.isEmpty
+              ? 'This account has been blocked and cannot sign in right now.'
+              : 'This account has been blocked and cannot sign in right now.\nReason: $reason');
+    if (!mounted) return;
+    setState(() => _blockedNoticeMessage = message);
+  }
+
+  void _clearBlockedNotice() {
+    if (!mounted || _blockedNoticeMessage == null) return;
+    setState(() => _blockedNoticeMessage = null);
   }
 
   @override
@@ -341,8 +391,10 @@ class _MyAppState extends State<MyApp> {
                     locale: _locale,
                     onToggleLocale: _toggleLocale,
                     onContinueAsGuest: _enterGuestMode,
+                    blockedNoticeMessage: _blockedNoticeMessage,
+                    onBlockedNoticeShown: _clearBlockedNotice,
                   )
-                : LedgerHome(
+                : AdminEntryPage(
                     db: widget.db,
                     onToggleLocale: _toggleLocale,
                     onToggleTheme: _toggleTheme,

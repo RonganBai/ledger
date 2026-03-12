@@ -16,6 +16,7 @@ class LedgerSideMenu extends StatelessWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback? onReplayTutorial;
   final VoidCallback onToggleTheme;
+  final VoidCallback? onBackToAdmin;
   final VoidCallback? onLogout;
   final bool isDarkMode;
 
@@ -33,6 +34,7 @@ class LedgerSideMenu extends StatelessWidget {
     required this.onOpenSettings,
     this.onReplayTutorial,
     required this.onToggleTheme,
+    this.onBackToAdmin,
     this.onLogout,
     required this.isDarkMode,
   });
@@ -237,22 +239,35 @@ class LedgerSideMenu extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onToggleTheme,
-                      icon: Icon(
-                        isDarkMode
-                            ? Icons.wb_sunny_rounded
-                            : Icons.dark_mode_rounded,
-                      ),
-                      label: Text(lsmt(context, 'Theme')),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onLogout,
-                      icon: const Icon(Icons.logout_rounded),
-                      label: Text(lsmt(context, 'Sign Out')),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (onBackToAdmin != null) ...[
+                          FilledButton.icon(
+                            onPressed: onBackToAdmin,
+                            icon: const Icon(
+                              Icons.admin_panel_settings_rounded,
+                            ),
+                            label: Text(lsmt(context, 'Back to Admin')),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                        OutlinedButton.icon(
+                          onPressed: onToggleTheme,
+                          icon: Icon(
+                            isDarkMode
+                                ? Icons.wb_sunny_rounded
+                                : Icons.dark_mode_rounded,
+                          ),
+                          label: Text(lsmt(context, 'Theme')),
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          onPressed: onLogout,
+                          icon: const Icon(Icons.logout_rounded),
+                          label: Text(lsmt(context, 'Sign Out')),
+                        ),
+                      ],
                     ),
                   ),
                 ],

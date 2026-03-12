@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_log.dart';
+import '../../services/user_access_service.dart';
 import 'auth_local_prefs.dart';
 import 'auth_redirect.dart';
 import 'reset_password_page.dart';
@@ -10,12 +13,16 @@ class LoginPage extends StatefulWidget {
   final VoidCallback? onToggleLocale;
   final Locale? locale;
   final Future<void> Function()? onContinueAsGuest;
+  final String? blockedNoticeMessage;
+  final VoidCallback? onBlockedNoticeShown;
 
   const LoginPage({
     super.key,
     this.onToggleLocale,
     this.locale,
     this.onContinueAsGuest,
+    this.blockedNoticeMessage,
+    this.onBlockedNoticeShown,
   });
 
   @override
@@ -27,12 +34,14 @@ class _LoginPageState extends State<LoginPage> {
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
+  final UserAccessService _accessService = UserAccessService();
 
   bool _isLoginMode = true;
   bool _autoLogin30Days = false;
   bool _submitting = false;
   String? _error;
   List<String> _rememberedEmails = const <String>[];
+  String? _lastBlockedNoticeMessage;
 
   bool get _isZh =>
       (widget.locale?.languageCode ??
@@ -45,6 +54,15 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _loadLocalAuthPrefs();
+    _scheduleBlockedNoticeIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant LoginPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.blockedNoticeMessage != widget.blockedNoticeMessage) {
+      _scheduleBlockedNoticeIfNeeded();
+    }
   }
 
   Future<void> _loadLocalAuthPrefs() async {
@@ -67,6 +85,36 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  void _scheduleBlockedNoticeIfNeeded() {
+    final message = widget.blockedNoticeMessage?.trim();
+    if (message == null || message.isEmpty) return;
+    if (_lastBlockedNoticeMessage == message) return;
+    _lastBlockedNoticeMessage = message;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_showBlockedNoticeDialog(message));
+    });
+  }
+
+  Future<void> _showBlockedNoticeDialog(String message) async {
+    setState(() => _error = _t('This account has been blocked.', '该账户已被封禁。'));
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_t('Account Blocked', '账户已被封禁')),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(_t('OK', '确定')),
+          ),
+        ],
+      ),
+    );
+    widget.onBlockedNoticeShown?.call();
+  }
+
+  // ignore: unused_element
   Future<void> _showForgotPasswordDialog() async {
     final ctrl = TextEditingController(text: _emailCtrl.text.trim());
     try {
@@ -106,6 +154,28 @@ class _LoginPageState extends State<LoginPage> {
         SnackBar(content: Text(_t('Reset email sent', '重置邮件已发送'))),
       );
       AppLog.i('Auth', 'Reset password email sent');
+    } on UserAccessBlockedException catch (e) {
+      AppLog.w('Auth', 'Blocked disabled user login. ${e.message}');
+      if (!mounted) return;
+      setState(() => _error = _t('This account has been blocked.', '该账户已被封禁。'));
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(_t('Account Blocked', '账户已被封禁')),
+          content: Text(
+            _t(
+              'This account has been blocked and cannot sign in right now.',
+              '该账户已被封禁，当前无法登录。',
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(_t('OK', '确定')),
+            ),
+          ],
+        ),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,6 +218,7 @@ class _LoginPageState extends State<LoginPage> {
           email: email,
           password: _passwordCtrl.text,
         );
+        await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
         await AuthLocalPrefs.recordSuccessfulLogin(
           email: email,
           autoLogin30Days: _autoLogin30Days,
@@ -188,6 +259,13 @@ class _LoginPageState extends State<LoginPage> {
           'SignUp success. emailVerified=$verified',
         );
       }
+    } on UserAccessBlockedException catch (e) {
+      AppLog.w(
+        'Auth',
+        '${_isLoginMode ? 'SignIn' : 'SignUp'} blocked. ${e.message}',
+      );
+      if (!mounted) return;
+      setState(() => _error = _t('This account has been blocked.', '该账户已被封禁。'));
     } on AuthException catch (e) {
       AppLog.w(
         'Auth',
