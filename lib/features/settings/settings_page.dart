@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:drift/drift.dart' show OrderingTerm;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -404,6 +405,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           MaterialPageRoute(
                             builder: (_) => _ImportExportPage(
                               db: widget.db,
+                              accountId: widget.accountId,
                               isGuestMode: widget.isGuestMode,
                             ),
                           ),
@@ -960,18 +962,139 @@ class _PetPage extends StatelessWidget {
   }
 }
 
-class _ImportExportPage extends StatelessWidget {
+class _ImportExportPage extends StatefulWidget {
   final AppDatabase db;
+  final int accountId;
   final bool isGuestMode;
 
-  const _ImportExportPage({required this.db, required this.isGuestMode});
+  const _ImportExportPage({
+    required this.db,
+    required this.accountId,
+    required this.isGuestMode,
+  });
+
+  @override
+  State<_ImportExportPage> createState() => _ImportExportPageState();
+}
+
+class _ImportExportPageState extends State<_ImportExportPage> {
+  late final ImportExportService _svc;
+  List<Account> _accounts = const <Account>[];
+  int? _selectedAccountId;
+  bool _loadingAccounts = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _svc = ImportExportService(widget.db);
+    _selectedAccountId = widget.accountId;
+    _loadAccounts();
+  }
+
+  Future<void> _loadAccounts() async {
+    final accounts =
+        await (widget.db.select(widget.db.accounts)
+              ..where((a) => a.isActive.equals(true))
+              ..orderBy([(a) => OrderingTerm(expression: a.sortOrder)]))
+            .get();
+    if (!mounted) return;
+    setState(() {
+      _accounts = accounts;
+      _loadingAccounts = false;
+      final hasSelected = accounts.any((a) => a.id == _selectedAccountId);
+      if (!hasSelected) {
+        _selectedAccountId = accounts.isEmpty ? null : accounts.first.id;
+      }
+    });
+  }
+
+  Account? get _selectedAccount {
+    final id = _selectedAccountId;
+    if (id == null) return null;
+    for (final account in _accounts) {
+      if (account.id == id) return account;
+    }
+    return null;
+  }
+
+  Future<void> _pickAccount() async {
+    if (_accounts.isEmpty) return;
+    final current = _selectedAccountId ?? _accounts.first.id;
+    final picked = await _showSelectionSheet<int>(
+      context,
+      title: st(context, 'Select Account'),
+      options: _accounts
+          .map(
+            (account) => (
+              value: account.id,
+              label: '${account.name} (${account.currency})',
+              icon: Icons.account_balance_wallet_rounded,
+            ),
+          )
+          .toList(growable: false),
+      current: current,
+    );
+    if (picked == null || picked == _selectedAccountId) return;
+    setState(() => _selectedAccountId = picked);
+  }
+
+  Future<void> _clearSelectedAccountBills() async {
+    final account = _selectedAccount;
+    if (account == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(st(context, 'Clear Selected Account Bills')),
+        content: Text(
+          st(
+            context,
+            'This will permanently delete bills for the selected account locally, and in cloud if signed in. Continue?',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(st(context, 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(st(context, 'Delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    final deleted = await _svc.clearStoredBillDataForAccount(
+      accountId: account.id,
+    );
+    var cloudDeleted = 0;
+    if (!widget.isGuestMode &&
+        Supabase.instance.client.auth.currentUser != null) {
+      cloudDeleted = await CloudBillSyncService(
+        db: widget.db,
+        client: Supabase.instance.client,
+      ).clearCloudBillsForLocalAccount(account.id);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          st(
+            context,
+            'Cleared selected account local $deleted, cloud $cloudDeleted.',
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final svc = ImportExportService(db);
     void toast(String msg) => ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(msg)));
+    final selectedAccount = _selectedAccount;
 
     return Scaffold(
       appBar: AppBar(title: Text(st(context, 'Import & Export'))),
@@ -980,8 +1103,8 @@ class _ImportExportPage extends StatelessWidget {
         children: [
           FilledButton(
             onPressed: () async {
-              final f = await svc.exportFullBackupJson();
-              await svc.shareFile(f);
+              final f = await _svc.exportFullBackupJson();
+              await _svc.shareFile(f);
               if (!context.mounted) return;
               toast(st(context, 'Backup exported'));
             },
@@ -990,9 +1113,9 @@ class _ImportExportPage extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton(
             onPressed: () async {
-              final picked = await svc.pickBackupJson();
+              final picked = await _svc.pickBackupJson();
               if (picked == null) return;
-              final r = await svc.importAppend(picked.data);
+              final r = await _svc.importAppend(picked.data);
               if (!context.mounted) return;
               toast(
                 st(
@@ -1004,49 +1127,38 @@ class _ImportExportPage extends StatelessWidget {
             child: Text(st(context, 'Import (Append Only)')),
           ),
           const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: Text(st(context, 'Clear All Stored Bills')),
-                  content: Text(
-                    st(
-                      context,
-                      'This will permanently delete local bills, and cloud bills if signed in. Continue?',
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: _loadingAccounts
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        _SelectionField(
+                          label: st(context, 'Target Account'),
+                          icon: Icons.account_balance_wallet_rounded,
+                          valueText: selectedAccount == null
+                              ? st(context, 'No account available')
+                              : '${selectedAccount.name} (${selectedAccount.currency})',
+                          onTap: _pickAccount,
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: selectedAccount == null
+                                ? null
+                                : _clearSelectedAccountBills,
+                            child: Text(
+                              st(context, 'Clear Selected Account Bills'),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text(st(context, 'Cancel')),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text(st(context, 'Delete')),
-                    ),
-                  ],
-                ),
-              );
-              if (ok != true) return;
-
-              final deleted = await svc.clearStoredBillData();
-              var cloudDeleted = 0;
-              if (!isGuestMode &&
-                  Supabase.instance.client.auth.currentUser != null) {
-                cloudDeleted = await CloudBillSyncService(
-                  db: db,
-                  client: Supabase.instance.client,
-                ).clearAllCloudBillsForCurrentUser();
-              }
-              if (!context.mounted) return;
-              toast(
-                st(context, 'Cleared local $deleted, cloud $cloudDeleted.'),
-              );
-            },
-            child: Text(st(context, 'Clear All Stored Bills')),
+            ),
           ),
-          if (isGuestMode) ...[
+          if (widget.isGuestMode) ...[
             const SizedBox(height: 12),
             Text(
               st(

@@ -132,8 +132,8 @@ class ExternalBillImportService {
     int failed = 0;
     final insertedTransactionIds = <String>[];
     int balanceAdjustedCents = 0;
-    final accountHasTransactions = await _accountHasAnyTransactions(accountId);
-    if (parsed.type == ExternalBillType.pnc && !accountHasTransactions) {
+    final accountBalanceCents = await _accountBalanceCents(accountId);
+    if (parsed.type == ExternalBillType.pnc && accountBalanceCents == 0) {
       try {
         final seedResult = await _applyPncOpeningBalanceSeed(
           accountId: accountId,
@@ -1059,14 +1059,20 @@ class ExternalBillImportService {
     return (value * 100).round();
   }
 
-  Future<bool> _accountHasAnyTransactions(int accountId) async {
+  Future<int> _accountBalanceCents(int accountId) async {
     final db = _dbOrThrow;
-    final one =
-        await (db.select(db.transactions)
-              ..where((t) => t.accountId.equals(accountId))
-              ..limit(1))
-            .getSingleOrNull();
-    return one != null;
+    final rows = await (db.select(
+      db.transactions,
+    )..where((t) => t.accountId.equals(accountId))).get();
+    var balanceCents = 0;
+    for (final row in rows) {
+      if (row.direction == 'income') {
+        balanceCents += row.amountCents;
+      } else if (row.direction == 'expense') {
+        balanceCents -= row.amountCents;
+      }
+    }
+    return balanceCents;
   }
 
   Future<({int adjustedCents, String? txId})> _applyPncOpeningBalanceSeed({

@@ -5,7 +5,6 @@ import 'package:drift/drift.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:cross_file/cross_file.dart';
 
 import '../../data/db/app_database.dart';
 
@@ -63,7 +62,9 @@ class ImportExportService {
     final decoded = jsonDecode(raw);
 
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid backup format: root is not an object');
+      throw const FormatException(
+        'Invalid backup format: root is not an object',
+      );
     }
     return PickedBackup(file: f, data: decoded);
   }
@@ -99,13 +100,32 @@ class ImportExportService {
     });
   }
 
+  Future<int> clearStoredBillDataForAccount({required int accountId}) async {
+    return db.transaction(() async {
+      final deletedTx = await (db.delete(
+        db.transactions,
+      )..where((t) => t.accountId.equals(accountId))).go();
+      int deletedRecurring = 0;
+      try {
+        deletedRecurring = await (db.delete(
+          db.recurringTransactions,
+        )..where((t) => t.accountId.equals(accountId))).go();
+      } catch (_) {
+        // ignore if table unavailable in old schema
+      }
+      return deletedTx + deletedRecurring;
+    });
+  }
+
   Future<ImportResult> _importInternal(
     Map<String, dynamic> backup, {
     required bool wipeFirst,
   }) async {
     final accounts = (backup['accounts'] as List? ?? const []).cast<dynamic>();
-    final categories = (backup['categories'] as List? ?? const []).cast<dynamic>();
-    final transactions = (backup['transactions'] as List? ?? const []).cast<dynamic>();
+    final categories = (backup['categories'] as List? ?? const [])
+        .cast<dynamic>();
+    final transactions = (backup['transactions'] as List? ?? const [])
+        .cast<dynamic>();
 
     return db.transaction(() async {
       if (wipeFirst) {
@@ -136,12 +156,19 @@ class ImportExportService {
         final currency = (m['currency'] ?? 'USD').toString();
         final isActive = (m['isActive'] ?? true) as bool;
         final sortOrder = (m['sortOrder'] as num?)?.toInt() ?? 0;
-        final createdAt = DateTime.tryParse((m['createdAt'] ?? '').toString()) ?? DateTime.now();
+        final createdAt =
+            DateTime.tryParse((m['createdAt'] ?? '').toString()) ??
+            DateTime.now();
 
         // append：按 name+type+currency 匹配已有账户
-        final existing = await (db.select(db.accounts)
-              ..where((t) => t.name.equals(name) & t.type.equals(type) & t.currency.equals(currency)))
-            .getSingleOrNull();
+        final existing =
+            await (db.select(db.accounts)..where(
+                  (t) =>
+                      t.name.equals(name) &
+                      t.type.equals(type) &
+                      t.currency.equals(currency),
+                ))
+                .getSingleOrNull();
 
         if (existing != null) {
           if (oldId != null) accIdMap[oldId] = existing.id;
@@ -149,7 +176,9 @@ class ImportExportService {
         }
 
         if (wipeFirst && oldId != null) {
-          await db.into(db.accounts).insert(
+          await db
+              .into(db.accounts)
+              .insert(
                 AccountsCompanion(
                   id: Value(oldId),
                   name: Value(name),
@@ -162,7 +191,9 @@ class ImportExportService {
               );
           accIdMap[oldId] = oldId;
         } else {
-          final newId = await db.into(db.accounts).insert(
+          final newId = await db
+              .into(db.accounts)
+              .insert(
                 AccountsCompanion.insert(
                   name: name,
                   type: Value(type),
@@ -189,12 +220,16 @@ class ImportExportService {
         final direction = (m['direction'] ?? 'expense').toString();
         final isActive = (m['isActive'] ?? true) as bool;
         final sortOrder = (m['sortOrder'] as num?)?.toInt() ?? 0;
-        final createdAt = DateTime.tryParse((m['createdAt'] ?? '').toString()) ?? DateTime.now();
+        final createdAt =
+            DateTime.tryParse((m['createdAt'] ?? '').toString()) ??
+            DateTime.now();
 
         // append：按 unique key（name+direction）匹配已有分类
-        final existing = await (db.select(db.categories)
-              ..where((t) => t.name.equals(name) & t.direction.equals(direction)))
-            .getSingleOrNull();
+        final existing =
+            await (db.select(db.categories)..where(
+                  (t) => t.name.equals(name) & t.direction.equals(direction),
+                ))
+                .getSingleOrNull();
 
         if (existing != null) {
           if (oldId != null) catIdMap[oldId] = existing.id;
@@ -202,7 +237,9 @@ class ImportExportService {
         }
 
         if (wipeFirst && oldId != null) {
-          await db.into(db.categories).insert(
+          await db
+              .into(db.categories)
+              .insert(
                 CategoriesCompanion(
                   id: Value(oldId),
                   name: Value(name),
@@ -215,7 +252,9 @@ class ImportExportService {
               );
           catIdMap[oldId] = oldId;
         } else {
-          final newId = await db.into(db.categories).insert(
+          final newId = await db
+              .into(db.categories)
+              .insert(
                 CategoriesCompanion.insert(
                   name: name,
                   direction: Value(direction),
@@ -260,8 +299,9 @@ class ImportExportService {
         }
 
         // 去重 1：UUID 主键
-        final existsById =
-            await (db.select(db.transactions)..where((x) => x.id.equals(id))).getSingleOrNull();
+        final existsById = await (db.select(
+          db.transactions,
+        )..where((x) => x.id.equals(id))).getSingleOrNull();
         if (existsById != null) {
           skippedTx++;
           continue;
@@ -272,9 +312,12 @@ class ImportExportService {
 
         // 去重 2：source + sourceId（sourceId 非空时可靠）
         if (sourceId != null && sourceId.isNotEmpty) {
-          final existsBySource = await (db.select(db.transactions)
-                ..where((x) => x.source.equals(source) & x.sourceId.equals(sourceId)))
-              .getSingleOrNull();
+          final existsBySource =
+              await (db.select(db.transactions)..where(
+                    (x) =>
+                        x.source.equals(source) & x.sourceId.equals(sourceId),
+                  ))
+                  .getSingleOrNull();
           if (existsBySource != null) {
             skippedTx++;
             continue;
@@ -282,14 +325,18 @@ class ImportExportService {
         }
 
         final oldAccountId = (m['accountId'] as num?)?.toInt();
-        final newAccountId = oldAccountId != null ? (accIdMap[oldAccountId] ?? oldAccountId) : null;
+        final newAccountId = oldAccountId != null
+            ? (accIdMap[oldAccountId] ?? oldAccountId)
+            : null;
         if (newAccountId == null) {
           skippedTx++;
           continue;
         }
 
         final oldCategoryId = (m['categoryId'] as num?)?.toInt();
-        final newCategoryId = oldCategoryId == null ? null : (catIdMap[oldCategoryId] ?? oldCategoryId);
+        final newCategoryId = oldCategoryId == null
+            ? null
+            : (catIdMap[oldCategoryId] ?? oldCategoryId);
 
         final direction = (m['direction'] ?? 'expense').toString();
         final amountCents = (m['amountCents'] as num?)?.toInt() ?? 0;
@@ -297,28 +344,36 @@ class ImportExportService {
         final merchant = m['merchant']?.toString();
         final memo = m['memo']?.toString();
         final occurredAt = DateTime.parse(m['occurredAt'].toString());
-        final createdAt = DateTime.tryParse((m['createdAt'] ?? '').toString()) ?? DateTime.now();
-        final updatedAt = DateTime.tryParse((m['updatedAt'] ?? '').toString()) ?? DateTime.now();
+        final createdAt =
+            DateTime.tryParse((m['createdAt'] ?? '').toString()) ??
+            DateTime.now();
+        final updatedAt =
+            DateTime.tryParse((m['updatedAt'] ?? '').toString()) ??
+            DateTime.now();
         final confidence = (m['confidence'] as num?)?.toDouble();
 
         // 兜底去重：manual + sourceId null 时
         if (sourceId == null || sourceId.isEmpty) {
-          final existsLoose = await (db.select(db.transactions)
-                ..where((x) =>
-                    x.source.equals(source) &
-                    x.direction.equals(direction) &
-                    x.amountCents.equals(amountCents) &
-                    x.currency.equals(currency) &
-                    x.accountId.equals(newAccountId) &
-                    x.occurredAt.equals(occurredAt)))
-              .getSingleOrNull();
+          final existsLoose =
+              await (db.select(db.transactions)..where(
+                    (x) =>
+                        x.source.equals(source) &
+                        x.direction.equals(direction) &
+                        x.amountCents.equals(amountCents) &
+                        x.currency.equals(currency) &
+                        x.accountId.equals(newAccountId) &
+                        x.occurredAt.equals(occurredAt),
+                  ))
+                  .getSingleOrNull();
           if (existsLoose != null) {
             skippedTx++;
             continue;
           }
         }
 
-        await db.into(db.transactions).insert(
+        await db
+            .into(db.transactions)
+            .insert(
               TransactionsCompanion(
                 id: Value(id),
                 source: Value(source),
@@ -352,41 +407,41 @@ class ImportExportService {
   // ======== JSON helpers (注意：类型是单数 Account/Category/Transaction) ========
 
   Map<String, dynamic> _accountToJson(Account a) => {
-        'id': a.id,
-        'name': a.name,
-        'type': a.type,
-        'currency': a.currency,
-        'isActive': a.isActive,
-        'sortOrder': a.sortOrder,
-        'createdAt': a.createdAt.toIso8601String(),
-      };
+    'id': a.id,
+    'name': a.name,
+    'type': a.type,
+    'currency': a.currency,
+    'isActive': a.isActive,
+    'sortOrder': a.sortOrder,
+    'createdAt': a.createdAt.toIso8601String(),
+  };
 
   Map<String, dynamic> _categoryToJson(Category c) => {
-        'id': c.id,
-        'name': c.name,
-        'direction': c.direction,
-        'parentId': c.parentId,
-        'isActive': c.isActive,
-        'sortOrder': c.sortOrder,
-        'createdAt': c.createdAt.toIso8601String(),
-      };
+    'id': c.id,
+    'name': c.name,
+    'direction': c.direction,
+    'parentId': c.parentId,
+    'isActive': c.isActive,
+    'sortOrder': c.sortOrder,
+    'createdAt': c.createdAt.toIso8601String(),
+  };
 
   Map<String, dynamic> _txToJson(Transaction t) => {
-        'id': t.id,
-        'source': t.source,
-        'sourceId': t.sourceId,
-        'accountId': t.accountId,
-        'direction': t.direction,
-        'amountCents': t.amountCents,
-        'currency': t.currency,
-        'merchant': t.merchant,
-        'memo': t.memo,
-        'categoryId': t.categoryId,
-        'occurredAt': t.occurredAt.toIso8601String(),
-        'createdAt': t.createdAt.toIso8601String(),
-        'updatedAt': t.updatedAt.toIso8601String(),
-        'confidence': t.confidence,
-      };
+    'id': t.id,
+    'source': t.source,
+    'sourceId': t.sourceId,
+    'accountId': t.accountId,
+    'direction': t.direction,
+    'amountCents': t.amountCents,
+    'currency': t.currency,
+    'merchant': t.merchant,
+    'memo': t.memo,
+    'categoryId': t.categoryId,
+    'occurredAt': t.occurredAt.toIso8601String(),
+    'createdAt': t.createdAt.toIso8601String(),
+    'updatedAt': t.updatedAt.toIso8601String(),
+    'confidence': t.confidence,
+  };
 }
 
 class ImportResult {

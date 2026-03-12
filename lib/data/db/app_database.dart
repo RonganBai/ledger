@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'tables/accounts.dart';
 import 'tables/categories.dart';
@@ -53,7 +54,7 @@ class AppDatabase extends _$AppDatabase {
       accounts,
     )..addColumns([accountCountExpr])).getSingle();
     final accountCount = accountCountRow.read(accountCountExpr) ?? 0;
-    if (accountCount == 0) {
+    if (accountCount == 0 && await _shouldSeedDefaultAccounts()) {
       await into(accounts).insert(
         AccountsCompanion.insert(name: 'Cash', type: const Value('cash')),
       );
@@ -96,6 +97,21 @@ class AppDatabase extends _$AppDatabase {
         ),
         mode: InsertMode.insertOrIgnore,
       );
+    }
+  }
+
+  Future<bool> _shouldSeedDefaultAccounts() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return true;
+      final rows = await Supabase.instance.client
+          .from('ledger_accounts')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
+      return rows.isEmpty;
+    } catch (_) {
+      return true;
     }
   }
 

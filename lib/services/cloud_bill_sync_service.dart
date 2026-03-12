@@ -71,6 +71,58 @@ class CloudBillSyncService {
     }
   }
 
+  Future<int> clearCloudBillsForLocalAccount(int localAccountId) async {
+    final user = client.auth.currentUser;
+    if (user == null) {
+      AppLog.w(
+        'CloudSync',
+        'Skip clear account cloud bills: no signed in user',
+      );
+      return 0;
+    }
+    final userId = user.id;
+    try {
+      final accountMap = await _ensureCloudAccounts(userId);
+      final cloudAccountId = accountMap[localAccountId];
+      if (cloudAccountId == null || cloudAccountId.trim().isEmpty) {
+        AppLog.i(
+          'CloudSync',
+          'Clear account cloud bills skipped: no cloud account mapping for local=$localAccountId',
+        );
+        return 0;
+      }
+
+      final rows = await client
+          .from('ledger_bills')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('account_id', cloudAccountId);
+      if (rows.isEmpty) {
+        AppLog.i(
+          'CloudSync',
+          'Clear account cloud bills: nothing to delete for local=$localAccountId cloud=$cloudAccountId',
+        );
+        return 0;
+      }
+
+      final deletedRows = await client
+          .from('ledger_bills')
+          .delete()
+          .eq('user_id', userId)
+          .eq('account_id', cloudAccountId)
+          .select('id');
+      final deletedCount = deletedRows.length;
+      AppLog.i(
+        'CloudSync',
+        'Clear account cloud bills done. local=$localAccountId cloud=$cloudAccountId deleted=$deletedCount',
+      );
+      return deletedCount;
+    } catch (e, st) {
+      AppLog.e('CloudSync', e, st);
+      rethrow;
+    }
+  }
+
   Future<void> deleteTransactionsFromCloudByLocal(
     List<Transaction> deletedLocalTxs,
   ) async {
@@ -819,6 +871,7 @@ class CloudBillSyncService {
 
   Future<Map<String, int>> _downloadAccountsFromCloud(String userId) async {
     final cloudRows = await _fetchCloudAccounts(userId);
+    await _removeSeededPlaceholderAccountsIfNeeded(cloudRows);
     final localRows = await (db.select(db.accounts)).get();
 
     final localByCloudId = <String, Account>{
@@ -869,6 +922,36 @@ class CloudBillSyncService {
       'Downloaded cloud accounts. cloud=${cloudRows.length} mapped=${cloudToLocal.length}',
     );
     return cloudToLocal;
+  }
+
+  Future<void> _removeSeededPlaceholderAccountsIfNeeded(
+    List<_CloudAccount> cloudRows,
+  ) async {
+    if (cloudRows.isEmpty) return;
+
+    final localRows = await (db.select(db.accounts)).get();
+    for (final account in localRows) {
+      if (!_isSeededPlaceholderAccount(account)) continue;
+      final txCountExpr = db.transactions.id.count();
+      final txCountRow =
+          await (db.selectOnly(db.transactions)
+                ..addColumns([txCountExpr])
+                ..where(db.transactions.accountId.equals(account.id)))
+              .getSingle();
+      final txCount = txCountRow.read(txCountExpr) ?? 0;
+      if (txCount != 0) continue;
+      await (db.delete(
+        db.accounts,
+      )..where((a) => a.id.equals(account.id))).go();
+    }
+  }
+
+  bool _isSeededPlaceholderAccount(Account account) {
+    final cloudAccountId = (account.cloudAccountId ?? '').trim();
+    if (cloudAccountId.isNotEmpty) return false;
+    final normalizedName = account.name.trim().toLowerCase();
+    const seededNames = <String>{'cash', 'paypal'};
+    return seededNames.contains(normalizedName);
   }
 
   Future<List<_CloudAccount>> _fetchCloudAccounts(String userId) async {
