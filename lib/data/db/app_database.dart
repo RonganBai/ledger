@@ -20,10 +20,15 @@ part 'app_database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase {
+  static const String guestOwnerUserId = '__guest__';
+
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
+
+  String get currentOwnerUserId =>
+      Supabase.instance.client.auth.currentUser?.id ?? guestOwnerUserId;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -45,18 +50,31 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         await m.addColumn(accounts, accounts.cloudAccountId);
       }
+      if (from < 6) {
+        await m.addColumn(accounts, accounts.ownerUserId);
+        final ownerId = currentOwnerUserId.replaceAll("'", "''");
+        await customStatement(
+          "UPDATE accounts SET owner_user_id = '$ownerId' WHERE owner_user_id = '__guest__' OR owner_user_id IS NULL",
+        );
+      }
     },
   );
 
   Future<void> _seedDefaults() async {
     final accountCountExpr = accounts.id.count();
-    final accountCountRow = await (selectOnly(
-      accounts,
-    )..addColumns([accountCountExpr])).getSingle();
+    final accountCountRow =
+        await (selectOnly(accounts)
+              ..addColumns([accountCountExpr])
+              ..where(accounts.ownerUserId.equals(currentOwnerUserId)))
+            .getSingle();
     final accountCount = accountCountRow.read(accountCountExpr) ?? 0;
     if (accountCount == 0 && await _shouldSeedDefaultAccounts()) {
       await into(accounts).insert(
-        AccountsCompanion.insert(name: 'Cash', type: const Value('cash')),
+        AccountsCompanion.insert(
+          name: 'Cash',
+          ownerUserId: Value(currentOwnerUserId),
+          type: const Value('cash'),
+        ),
       );
     }
 

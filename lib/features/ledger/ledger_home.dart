@@ -49,6 +49,7 @@ import '../../services/app_log.dart';
 
 class LedgerHome extends StatefulWidget {
   final AppDatabase db;
+  final VoidCallback? onReturnToAdminEntry;
   final VoidCallback onToggleLocale;
   final VoidCallback onToggleTheme;
   final bool isDarkMode;
@@ -64,6 +65,7 @@ class LedgerHome extends StatefulWidget {
   const LedgerHome({
     super.key,
     required this.db,
+    this.onReturnToAdminEntry,
     required this.onToggleLocale,
     required this.onToggleTheme,
     required this.isDarkMode,
@@ -106,6 +108,8 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   int? _currentAccountId;
   String _currentAccountCurrency = 'USD';
   static const String _kCurrentAccountPref = 'ledger_current_account_id';
+  String get _currentAccountPrefKey =>
+      '${_kCurrentAccountPref}_${widget.db.currentOwnerUserId}';
   final OnboardingManager _onboardingManager = OnboardingManager();
   late final HomeTutorialController _homeTutorialController;
   bool _didCheckHomeTutorial = false;
@@ -426,9 +430,11 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<int> _ensureDefaultAccount() async {
-    final existing = await (widget.db.select(
-      widget.db.accounts,
-    )..orderBy([(a) => d.OrderingTerm(expression: a.id)])).get();
+    final existing =
+        await (widget.db.select(widget.db.accounts)
+              ..where((a) => a.ownerUserId.equals(widget.db.currentOwnerUserId))
+              ..orderBy([(a) => d.OrderingTerm(expression: a.id)]))
+            .get();
     if (existing.isNotEmpty) {
       final active = existing.where((a) => a.isActive).toList(growable: false);
       return (active.isNotEmpty ? active.first : existing.first).id;
@@ -438,6 +444,7 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
         .insert(
           AccountsCompanion.insert(
             name: 'Default',
+            ownerUserId: d.Value(widget.db.currentOwnerUserId),
             type: d.Value('cash'),
             currency: d.Value('USD'),
           ),
@@ -448,21 +455,29 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   Future<void> _initCurrentAccount() async {
     final prefs = await SharedPreferences.getInstance();
     final fallback = await _ensureDefaultAccount();
-    final prefId = prefs.getInt(_kCurrentAccountPref);
+    final prefId = prefs.getInt(_currentAccountPrefKey);
 
     int selected = fallback;
     if (prefId != null) {
       final hit =
-          await (widget.db.select(widget.db.accounts)
-                ..where((a) => a.id.equals(prefId) & a.isActive.equals(true)))
+          await (widget.db.select(widget.db.accounts)..where(
+                (a) =>
+                    a.id.equals(prefId) &
+                    a.isActive.equals(true) &
+                    a.ownerUserId.equals(widget.db.currentOwnerUserId),
+              ))
               .getSingleOrNull();
       if (hit != null) selected = hit.id;
     }
 
-    await prefs.setInt(_kCurrentAccountPref, selected);
-    final current = await (widget.db.select(
-      widget.db.accounts,
-    )..where((a) => a.id.equals(selected))).getSingleOrNull();
+    await prefs.setInt(_currentAccountPrefKey, selected);
+    final current =
+        await (widget.db.select(widget.db.accounts)..where(
+              (a) =>
+                  a.id.equals(selected) &
+                  a.ownerUserId.equals(widget.db.currentOwnerUserId),
+            ))
+            .getSingleOrNull();
     if (!mounted) return;
     setState(() {
       _currentAccountId = selected;
@@ -472,10 +487,14 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
 
   Future<void> _setCurrentAccount(int accountId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_kCurrentAccountPref, accountId);
-    final current = await (widget.db.select(
-      widget.db.accounts,
-    )..where((a) => a.id.equals(accountId))).getSingleOrNull();
+    await prefs.setInt(_currentAccountPrefKey, accountId);
+    final current =
+        await (widget.db.select(widget.db.accounts)..where(
+              (a) =>
+                  a.id.equals(accountId) &
+                  a.ownerUserId.equals(widget.db.currentOwnerUserId),
+            ))
+            .getSingleOrNull();
     if (!mounted) return;
     setState(() {
       _currentAccountId = accountId;
@@ -496,9 +515,13 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   }
 
   Future<void> _applyRecurringForAccount(int accountId) async {
-    final account = await (widget.db.select(
-      widget.db.accounts,
-    )..where((a) => a.id.equals(accountId))).getSingleOrNull();
+    final account =
+        await (widget.db.select(widget.db.accounts)..where(
+              (a) =>
+                  a.id.equals(accountId) &
+                  a.ownerUserId.equals(widget.db.currentOwnerUserId),
+            ))
+            .getSingleOrNull();
     if (account == null) return;
     final inserted = await RecurringTransactionService.applyDueForAccount(
       widget.db,
@@ -513,7 +536,11 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
   Future<void> _switchAccountFromSheet() async {
     final accounts =
         await (widget.db.select(widget.db.accounts)
-              ..where((a) => a.isActive.equals(true))
+              ..where(
+                (a) =>
+                    a.isActive.equals(true) &
+                    a.ownerUserId.equals(widget.db.currentOwnerUserId),
+              )
               ..orderBy([
                 (a) => d.OrderingTerm(expression: a.sortOrder),
                 (a) => d.OrderingTerm(expression: a.id),
@@ -1980,13 +2007,25 @@ class _LedgerHomeState extends State<LedgerHome> with TickerProviderStateMixin {
                           }
                         : null,
                     onToggleTheme: widget.onToggleTheme,
+                    onBackToAdmin: widget.onReturnToAdminEntry == null
+                        ? null
+                        : () {
+                            _closeDrawer();
+                            widget.onReturnToAdminEntry?.call();
+                          },
                     onLogout: () async {
                       _closeDrawer();
                       if (widget.isGuestMode) {
                         widget.onExitGuestMode?.call();
                         return;
                       }
+                      final navigator = Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      );
                       await Supabase.instance.client.auth.signOut();
+                      if (!mounted) return;
+                      navigator.popUntil((route) => route.isFirst);
                       AppLog.i('Auth', 'Sign out completed');
                     },
                     isDarkMode: widget.isDarkMode,

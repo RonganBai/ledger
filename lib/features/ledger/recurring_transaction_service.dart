@@ -8,9 +8,13 @@ class RecurringTransactionService {
   static final Uuid _uuid = const Uuid();
 
   static Future<int> applyDueForAllAccounts(AppDatabase db) async {
-    final accounts = await (db.select(
-      db.accounts,
-    )..where((a) => a.isActive.equals(true))).get();
+    final accounts =
+        await (db.select(db.accounts)..where(
+              (a) =>
+                  a.isActive.equals(true) &
+                  a.ownerUserId.equals(db.currentOwnerUserId),
+            ))
+            .get();
     var inserted = 0;
     for (final account in accounts) {
       inserted += await applyDueForAccount(

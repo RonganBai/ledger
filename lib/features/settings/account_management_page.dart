@@ -62,9 +62,14 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
     });
     try {
       final p = await _service.loadCurrentProfile();
+      final currentEmail =
+          Supabase.instance.client.auth.currentUser?.email ?? '';
+      final defaultName = (p?.displayName ?? '').trim().isEmpty
+          ? currentEmail
+          : p!.displayName;
       if (!mounted) return;
       setState(() {
-        _nameCtrl.text = p?.displayName ?? '';
+        _nameCtrl.text = defaultName;
         _gender = p?.gender;
         _birthYear = p?.birthYear;
         _birthMonth = p?.birthMonth;
@@ -278,6 +283,10 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                                       controller: _nameCtrl,
                                       decoration: InputDecoration(
                                         labelText: _t('Username', '用户名'),
+                                        helperText: _t(
+                                          'Defaults to your registered email if left unchanged.',
+                                          '默认使用注册邮箱，后续可自行修改。',
+                                        ),
                                         prefixIcon: const Icon(
                                           Icons.person_rounded,
                                         ),

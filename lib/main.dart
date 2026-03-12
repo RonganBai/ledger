@@ -73,9 +73,11 @@ Future<void> main() async {
     }
 
     try {
-      final accounts = await (db.select(
-        db.accounts,
-      )..where((a) => a.isActive.equals(true))).get();
+      final accounts =
+          await (db.select(db.accounts)
+                ..where((a) => a.isActive.equals(true))
+                ..where((a) => a.ownerUserId.equals(db.currentOwnerUserId)))
+              .get();
       for (final a in accounts) {
         await ReportService.archiveLastMonthIfNeeded(db, accountId: a.id);
       }

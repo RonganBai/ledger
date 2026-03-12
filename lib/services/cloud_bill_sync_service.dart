@@ -5,12 +5,14 @@ import 'package:uuid/uuid.dart';
 import '../data/db/app_database.dart';
 import 'app_log.dart';
 import 'sync_conflict_log_service.dart';
+import 'user_access_service.dart';
 
 class CloudBillSyncService {
   final AppDatabase db;
   final SupabaseClient client;
   final Uuid _uuid = const Uuid();
   final SyncConflictLogService _conflictLog = SyncConflictLogService();
+  late final UserAccessService _accessService = UserAccessService(client: client);
 
   CloudBillSyncService({required this.db, required this.client});
 
@@ -34,6 +36,7 @@ class CloudBillSyncService {
   }
 
   Future<int> clearAllCloudBillsForCurrentUser() async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w('CloudSync', 'Skip clear cloud bills: no signed in user');
@@ -72,6 +75,7 @@ class CloudBillSyncService {
   }
 
   Future<int> clearCloudBillsForLocalAccount(int localAccountId) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w(
@@ -127,6 +131,7 @@ class CloudBillSyncService {
     List<Transaction> deletedLocalTxs,
   ) async {
     if (deletedLocalTxs.isEmpty) return;
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w('CloudSync', 'Skip cloud delete: no signed in user');
@@ -182,6 +187,7 @@ class CloudBillSyncService {
   }
 
   Future<void> syncNow({required String reason}) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w('CloudSync', 'Skip sync($reason): no signed in user');
@@ -371,6 +377,7 @@ class CloudBillSyncService {
   }
 
   Future<void> downloadFromCloudNow({required String reason}) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w('CloudSync', 'Skip download($reason): no signed in user');
@@ -572,6 +579,7 @@ class CloudBillSyncService {
     required Account account,
     required String reason,
   }) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w(
@@ -604,6 +612,7 @@ class CloudBillSyncService {
     required Account newAccount,
     required String reason,
   }) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w(
@@ -663,6 +672,7 @@ class CloudBillSyncService {
     required Account account,
     required String reason,
   }) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w(
@@ -713,6 +723,7 @@ class CloudBillSyncService {
     required String localTransactionId,
     required String reason,
   }) async {
+    await _accessService.ensureCurrentUserEnabled(signOutIfDisabled: true);
     final user = client.auth.currentUser;
     if (user == null) {
       AppLog.w('CloudSync', 'Skip single upload($reason): no signed in user');
@@ -814,7 +825,9 @@ class CloudBillSyncService {
   }
 
   Future<Map<int, String>> _ensureCloudAccounts(String userId) async {
-    final localAccounts = await (db.select(db.accounts)).get();
+    final localAccounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
     final cloudRows = await client
         .from('ledger_accounts')
         .select('id,name,currency')
@@ -872,7 +885,9 @@ class CloudBillSyncService {
   Future<Map<String, int>> _downloadAccountsFromCloud(String userId) async {
     final cloudRows = await _fetchCloudAccounts(userId);
     await _removeSeededPlaceholderAccountsIfNeeded(cloudRows);
-    final localRows = await (db.select(db.accounts)).get();
+    final localRows = await (db.select(
+      db.accounts,
+    )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
 
     final localByCloudId = <String, Account>{
       for (final a in localRows)
@@ -908,6 +923,7 @@ class CloudBillSyncService {
           .insert(
             AccountsCompanion.insert(
               name: cloud.name,
+              ownerUserId: d.Value(db.currentOwnerUserId),
               cloudAccountId: d.Value(cloud.id),
               type: d.Value(cloud.type),
               currency: d.Value(cloud.currency),
@@ -929,7 +945,9 @@ class CloudBillSyncService {
   ) async {
     if (cloudRows.isEmpty) return;
 
-    final localRows = await (db.select(db.accounts)).get();
+    final localRows = await (db.select(
+      db.accounts,
+    )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
     for (final account in localRows) {
       if (!_isSeededPlaceholderAccount(account)) continue;
       final txCountExpr = db.transactions.id.count();
@@ -1286,7 +1304,11 @@ class CloudBillSyncService {
   ) async {
     final byCloudId =
         await (db.select(db.accounts)
-              ..where((a) => a.cloudAccountId.equals(cloudAccountId))
+              ..where(
+                (a) =>
+                    a.cloudAccountId.equals(cloudAccountId) &
+                    a.ownerUserId.equals(db.currentOwnerUserId),
+              )
               ..limit(1))
             .getSingleOrNull();
     if (byCloudId != null) return byCloudId.id;
@@ -1318,7 +1340,8 @@ class CloudBillSyncService {
                     ..where(
                       (a) =>
                           a.name.equals(cloud.name) &
-                          a.currency.equals(cloud.currency),
+                          a.currency.equals(cloud.currency) &
+                          a.ownerUserId.equals(db.currentOwnerUserId),
                     )
                     ..limit(1))
                   .getSingleOrNull();
@@ -1342,6 +1365,7 @@ class CloudBillSyncService {
               .insert(
                 AccountsCompanion.insert(
                   name: cloud.name,
+                  ownerUserId: d.Value(db.currentOwnerUserId),
                   cloudAccountId: d.Value(cloudAccountId),
                   type: d.Value(cloud.type),
                   currency: d.Value(cloud.currency),
@@ -1361,6 +1385,7 @@ class CloudBillSyncService {
         .insert(
           AccountsCompanion.insert(
             name: 'Cloud-$fallbackCurrency-${cloudAccountId.substring(0, 6)}',
+            ownerUserId: d.Value(db.currentOwnerUserId),
             cloudAccountId: d.Value(cloudAccountId),
             currency: d.Value(fallbackCurrency),
             type: const d.Value('bank'),

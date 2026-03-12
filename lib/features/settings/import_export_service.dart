@@ -20,9 +20,16 @@ class ImportExportService {
   // ======== Export (Full Backup) ========
 
   Future<File> exportFullBackupJson() async {
-    final acc = await db.select(db.accounts).get();
+    final acc = await (db.select(
+      db.accounts,
+    )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
     final cat = await db.select(db.categories).get();
-    final tx = await db.select(db.transactions).get();
+    final accountIds = acc.map((e) => e.id).toSet();
+    final tx = accountIds.isEmpty
+        ? const <Transaction>[]
+        : await (db.select(
+            db.transactions,
+          )..where((t) => t.accountId.isIn(accountIds))).get();
 
     final payload = <String, dynamic>{
       'version': 1,
@@ -84,10 +91,19 @@ class ImportExportService {
   /// 返回删除的交易条数（transactions + recurringTransactions）。
   Future<int> clearStoredBillData() async {
     return db.transaction(() async {
-      final deletedTx = await db.delete(db.transactions).go();
+      final ownedAccounts = await (db.select(
+        db.accounts,
+      )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
+      final ownedIds = ownedAccounts.map((e) => e.id).toList(growable: false);
+      if (ownedIds.isEmpty) return 0;
+      final deletedTx = await (db.delete(
+        db.transactions,
+      )..where((t) => t.accountId.isIn(ownedIds))).go();
       int deletedRecurring = 0;
       try {
-        deletedRecurring = await db.delete(db.recurringTransactions).go();
+        deletedRecurring = await (db.delete(
+          db.recurringTransactions,
+        )..where((t) => t.accountId.isIn(ownedIds))).go();
       } catch (_) {
         // ignore if table unavailable in old schema
       }
@@ -130,9 +146,18 @@ class ImportExportService {
     return db.transaction(() async {
       if (wipeFirst) {
         // 删除顺序：先 tx（外键），再 categories，再 accounts
-        await db.delete(db.transactions).go();
-        await db.delete(db.categories).go();
-        await db.delete(db.accounts).go();
+        final ownedAccounts = await (db.select(
+          db.accounts,
+        )..where((a) => a.ownerUserId.equals(db.currentOwnerUserId))).get();
+        final ownedIds = ownedAccounts.map((e) => e.id).toList(growable: false);
+        if (ownedIds.isNotEmpty) {
+          await (db.delete(
+            db.transactions,
+          )..where((t) => t.accountId.isIn(ownedIds))).go();
+          await (db.delete(
+            db.accounts,
+          )..where((a) => a.id.isIn(ownedIds))).go();
+        }
 
         // 你的数据库里有 SyncState 表
         try {
@@ -166,7 +191,8 @@ class ImportExportService {
                   (t) =>
                       t.name.equals(name) &
                       t.type.equals(type) &
-                      t.currency.equals(currency),
+                      t.currency.equals(currency) &
+                      t.ownerUserId.equals(db.currentOwnerUserId),
                 ))
                 .getSingleOrNull();
 
@@ -181,6 +207,7 @@ class ImportExportService {
               .insert(
                 AccountsCompanion(
                   id: Value(oldId),
+                  ownerUserId: Value(db.currentOwnerUserId),
                   name: Value(name),
                   type: Value(type),
                   currency: Value(currency),
@@ -196,6 +223,7 @@ class ImportExportService {
               .insert(
                 AccountsCompanion.insert(
                   name: name,
+                  ownerUserId: Value(db.currentOwnerUserId),
                   type: Value(type),
                   currency: Value(currency),
                   isActive: Value(isActive),

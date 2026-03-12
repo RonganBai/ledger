@@ -49,7 +49,11 @@ class _ExternalBillImportPageState extends State<ExternalBillImportPage> {
     try {
       final rows =
           await (widget.db.select(widget.db.accounts)
-                ..where((a) => a.isActive.equals(true))
+                ..where(
+                  (a) =>
+                      a.isActive.equals(true) &
+                      a.ownerUserId.equals(widget.db.currentOwnerUserId),
+                )
                 ..orderBy([
                   (a) => d.OrderingTerm(expression: a.sortOrder),
                   (a) => d.OrderingTerm(expression: a.id),
