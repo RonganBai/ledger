@@ -42,6 +42,8 @@ supabase/
   ledger_bills_schema.sql  # Supabase schema + RLS policies
 docs/
   ARCHITECTURE.en.md   # Module and data-flow notes (English)
+  USER_GUIDE.en.md     # Full user guide (English)
+  USER_GUIDE.zh-CN.md  # Full user guide (Chinese)
 ```
 
 ## Quick Start
@@ -58,6 +60,11 @@ flutter pub get
 ```bash
 flutter run
 ```
+
+## User Guides
+
+- English user guide: [`docs/USER_GUIDE.en.md`](docs/USER_GUIDE.en.md)
+- Chinese user guide: [`docs/USER_GUIDE.zh-CN.md`](docs/USER_GUIDE.zh-CN.md)
 
 ## App Download
 

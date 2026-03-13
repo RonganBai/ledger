@@ -37,8 +37,18 @@ jobs:
       - name: Prepare artifact
         run: cp build/app/outputs/flutter-apk/app-release.apk ledger-app.apk
 
+      - name: Generate release notes
+        shell: bash
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          RELEASE_DATE="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          sed \
+            -e "s/__TAG__/${TAG_NAME}/g" \
+            -e "s/__RELEASE_DATE__/${RELEASE_DATE//\//\\/}/g" \
+            .github/release-notes-template.md > release-notes.md
+
       - name: Create GitHub Release and upload APK
         uses: softprops/action-gh-release@v2
         with:
           files: ledger-app.apk
-          generate_release_notes: true
+          body_path: release-notes.md
